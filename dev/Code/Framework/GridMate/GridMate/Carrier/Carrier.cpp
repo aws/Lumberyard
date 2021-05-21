@@ -1300,6 +1300,8 @@ CarrierThread::CarrierThread(const CarrierDesc& desc, AZStd::shared_ptr<Compress
         bool isInit = m_compressor->Init();
         AZ_UNUSED(isInit);
         AZ_Error("GridMate", isInit, "GridMate carrier failed to initialize compression\n");
+        
+        m_maxMsgDataSizeBytes -= k_sizeOfCompressedHintHeader;
     }
     //////////////////////////////////////////////////////////////////////////
 
