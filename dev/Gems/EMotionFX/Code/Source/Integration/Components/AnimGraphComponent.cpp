@@ -173,6 +173,7 @@ namespace EMotionFX
         //////////////////////////////////////////////////////////////////////////
         AnimGraphComponent::AnimGraphComponent(const Configuration* config)
         {
+            m_animGraphInstance.reset();
             if (config)
             {
                 m_configuration = *config;
