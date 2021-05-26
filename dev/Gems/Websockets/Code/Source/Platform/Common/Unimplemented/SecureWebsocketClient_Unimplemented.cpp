@@ -19,7 +19,7 @@ namespace Websockets
 
     }
 
-    bool SecureWebsocketClient_Unimplemented::ConnectWebsocket(const AZStd::string & websocket, const OnMessage & messageFunc)
+    bool SecureWebsocketClient_Unimplemented::ConnectWebsocket(const AZStd::string & websocket, const OnMessage & messageFunc, const AZStd::string& authorization)
     {
         return false;
     }

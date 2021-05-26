@@ -60,6 +60,25 @@ namespace Websockets
         WebsocketsRequestBus::Handler::BusDisconnect();
     }
 
+    AZStd::unique_ptr<IWebsocketClient> WebsocketsSystemComponent::CreateClientWithAuth(const AZStd::string& websocket, const OnMessage& messageFunc, const AZStd::string& authorization)
+    {
+        AZStd::unique_ptr<SecureWebsocketClient> socket = AZStd::make_unique<SecureWebsocketClient>();
+
+        if (!socket)
+        {
+            AZ_Error("Websocket Gem", socket, "Socket not created!");
+            return nullptr;
+        }
+
+        if (!socket->ConnectWebsocket(websocket, messageFunc, authorization))
+        {
+            AZ_Error("Websocket Gem", false, "Socket connection unsuccessful");
+            return nullptr;
+        }
+
+        return socket;
+    }
+    
     AZStd::unique_ptr<IWebsocketClient> WebsocketsSystemComponent::CreateClient(const AZStd::string& websocket, const OnMessage& messageFunc, WebsocketType type)
     {
         switch (type)

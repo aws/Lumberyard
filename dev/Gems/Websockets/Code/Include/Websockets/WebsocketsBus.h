@@ -55,6 +55,9 @@ namespace Websockets
         //!avoided in production.
         virtual AZStd::unique_ptr<IWebsocketClient> CreateClient(const AZStd::string& websocket,
             const OnMessage& messageFunc, WebsocketType type) = 0;
+
+        virtual AZStd::unique_ptr<IWebsocketClient> CreateClientWithAuth(const AZStd::string& websocket,
+            const OnMessage& messageFunc, const AZStd::string& authorization) = 0;
     };
 
 

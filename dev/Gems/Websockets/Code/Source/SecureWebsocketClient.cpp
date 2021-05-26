@@ -34,6 +34,11 @@ namespace Websockets
         }
     }
 
+    bool SecureWebsocketClient::ConnectWebsocket(const AZStd::string& websocket, const OnMessage& messageFunc, const AZStd::string& authorization)
+    {
+        return Platform::ConnectWebsocket(websocket, messageFunc, authorization);
+    }
+
     bool SecureWebsocketClient::ConnectWebsocket(const AZStd::string& websocket, const OnMessage& messageFunc)
     {
         return Platform::ConnectWebsocket(websocket, messageFunc);

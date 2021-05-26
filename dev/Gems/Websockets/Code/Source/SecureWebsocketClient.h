@@ -38,7 +38,7 @@ namespace Websockets
 
         static void Reflect(AZ::ReflectContext* context);
 
-        bool ConnectWebsocket(const AZStd::string& websocket, const OnMessage& messageFunc);
+        bool ConnectWebsocket(const AZStd::string& websocket, const OnMessage& messageFunc, const AZStd::string& authorization = "");
 
         //interface functions
         bool IsConnectionOpen() const override;

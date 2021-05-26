@@ -36,6 +36,9 @@ namespace Websockets
         void Activate() override;
         void Deactivate() override;
 
+        AZStd::unique_ptr<IWebsocketClient> CreateClientWithAuth(const AZStd::string& websocket,
+            const OnMessage& messageFunc, const AZStd::string& authorization) override;
+
         AZStd::unique_ptr<IWebsocketClient> CreateClient(const AZStd::string& websocket,
             const OnMessage& messageFunc, WebsocketType type = WebsocketType::Secure) override;
     };

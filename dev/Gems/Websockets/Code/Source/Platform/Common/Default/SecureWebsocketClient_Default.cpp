@@ -27,7 +27,7 @@ namespace Websockets
         }
     }
 
-    bool SecureWebsocketClient_Default::ConnectWebsocket(const AZStd::string & websocket, const OnMessage & messageFunc)
+    bool SecureWebsocketClient_Default::ConnectWebsocket(const AZStd::string & websocket, const OnMessage & messageFunc, const AZStd::string& authorization)
     {
         m_messageFunction = messageFunc;
 
@@ -42,7 +42,7 @@ namespace Websockets
         //TLS handler (Transport Layer Security, also often referred to as SSL secure socket handler)
         m_client.set_tls_init_handler([](websocketpp::connection_hdl hdl) -> websocketpp::lib::shared_ptr<asio::ssl::context>
         {
-            websocketpp::lib::shared_ptr<asio::ssl::context> contextPtr(new asio::ssl::context(asio::ssl::context::tlsv1));
+            websocketpp::lib::shared_ptr<asio::ssl::context> contextPtr(new asio::ssl::context(asio::ssl::context::sslv23));
 
             websocketpp::lib::error_code errorCode;
             contextPtr->set_options(asio::ssl::context::default_workarounds
@@ -73,6 +73,11 @@ namespace Websockets
         if (!m_connection)
         {
             return false;
+        }
+
+        if (!authorization.empty())
+        {
+            m_connection->append_header("Authorization", authorization.c_str());
         }
 
         // Connect only requests a connection. No network messages are

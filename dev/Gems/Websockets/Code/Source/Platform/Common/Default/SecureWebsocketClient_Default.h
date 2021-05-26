@@ -26,7 +26,7 @@ namespace Websockets
 
         void Destroy();
 
-        bool ConnectWebsocket(const AZStd::string& websocket, const OnMessage& messageFunc);
+        bool ConnectWebsocket(const AZStd::string& websocket, const OnMessage& messageFunc, const AZStd::string& authorization);
 
         bool IsConnectionOpen() const;
         void SendWebsocketMessage(const AZStd::string& msgBody);
