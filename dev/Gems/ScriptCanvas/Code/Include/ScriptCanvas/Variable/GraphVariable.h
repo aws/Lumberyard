@@ -18,7 +18,7 @@
 
 #include <ScriptCanvas/Core/DatumBus.h>
 
-// Version Converion Information
+// Version Conversion Information
 #include <ScriptCanvas/Deprecated/VariableHelpers.h>
 ////
 
