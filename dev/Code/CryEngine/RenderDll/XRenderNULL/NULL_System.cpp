@@ -46,6 +46,8 @@ WIN_HWND CNULLRenderer::Init(int x, int y, int width, int height, unsigned int c
     SetHeight(height);
     m_backbufferWidth = width;
     m_backbufferHeight = height;
+    m_nativeWidth = width;
+    m_nativeHeight = height;
     m_Features |= RFT_HW_NVIDIA;
 
     if (!g_shaderGeneralHeap)

@@ -1404,6 +1404,14 @@ bool CSystem::OpenRenderLibrary(int type, const SSystemInitParams& initParams)
     {
         type = R_NULL_RENDERER;
     }
+
+#if defined(AZ_PLATFORM_WINDOWS) && !defined(_RELEASE)
+    else if (m_env.pSystem->GetICmdLine()->FindArg(eCLAT_Pre, "nullrender") != 0)
+    {
+        type = R_NULL_RENDERER;
+    }
+#endif // AZ_PLATFORM_WINDOWS && !_RELEASE
+
 #endif
 
     const char* libname = "";
