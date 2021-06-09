@@ -139,6 +139,9 @@ namespace EMotionFX
                     // Anim Graph Sync
                     ->Event("SyncAnimGraph", &AnimGraphComponentRequestBus::Events::SyncAnimGraph)
                     ->Event("DesyncAnimGraph", &AnimGraphComponentRequestBus::Events::DesyncAnimGraph)
+
+                    ->Event("StartAnimGraph", &AnimGraphComponentRequestBus::Events::StartAnimGraph)
+                    ->Event("StopAnimGraph", &AnimGraphComponentRequestBus::Events::StopAnimGraph)
                 ;
 
                 behaviorContext->EBus<AnimGraphComponentNotificationBus>("AnimGraphComponentNotificationBus")
@@ -1174,6 +1177,30 @@ namespace EMotionFX
                     leaderEntityId,
                     &AnimGraphComponentNotificationBus::Events::OnAnimGraphDesynced,
                     m_animGraphInstance.get());
+            }
+        }
+
+        void AnimGraphComponent::StartAnimGraph()
+        {
+            if (m_animGraphInstance)
+            {
+                if (m_actorInstance)
+                {
+                    m_actorInstance->SetAnimGraphInstance(m_animGraphInstance.get());
+                }
+                m_animGraphInstance->Start();
+            }
+        }
+
+        void AnimGraphComponent::StopAnimGraph()
+        {
+            if (m_animGraphInstance)
+            {
+                m_animGraphInstance->Stop();
+                if (m_actorInstance)
+                {
+                    m_actorInstance->SetAnimGraphInstance(nullptr);
+                }
             }
         }
     } // namespace Integration

@@ -141,6 +141,8 @@ namespace EMotionFX
             bool GetVisualizeEnabled() override;
             void SyncAnimGraph(AZ::EntityId leaderEntityId) override;
             void DesyncAnimGraph(AZ::EntityId leaderEntityId) override;
+            void StartAnimGraph() override;
+            void StopAnimGraph() override;
             //////////////////////////////////////////////////////////////////////////
 
             //////////////////////////////////////////////////////////////////////////
@@ -177,7 +179,6 @@ namespace EMotionFX
             static void GetIncompatibleServices(AZ::ComponentDescriptor::DependencyArrayType& incompatible)
             {
                 incompatible.push_back(AZ_CRC("EMotionFXAnimGraphService", 0x9ec3c819));
-                incompatible.push_back(AZ_CRC("EMotionFXSimpleMotionService", 0xea7a05d8));
             }
 
             static void GetDependentServices(AZ::ComponentDescriptor::DependencyArrayType& dependent)
