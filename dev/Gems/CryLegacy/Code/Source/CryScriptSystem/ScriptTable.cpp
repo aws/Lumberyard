@@ -897,14 +897,7 @@ bool CScriptTable::AddFunction(const SUserFunctionDesc& fd)
 
     // Make function signature.
     char sFuncSignature[256];
-    if (fd.sGlobalName[0] != 0)
-    {
-        sprintf_s(sFuncSignature, "%s.%s(%s)", fd.sGlobalName, fd.sFunctionName, fd.sFunctionParams);
-    }
-    else
-    {
-        sprintf_s(sFuncSignature, "%s.%s(%s)", fd.sGlobalName, fd.sFunctionName, fd.sFunctionParams);
-    }
+    sprintf_s(sFuncSignature, "%s.%s(%s)", fd.sGlobalName, fd.sFunctionName, fd.sFunctionParams);
 
     PushRef();
     lua_pushstring(L, fd.sFunctionName);
