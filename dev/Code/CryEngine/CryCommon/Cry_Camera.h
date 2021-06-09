@@ -995,7 +995,7 @@ ILINE bool CCamera::Unproject(const Vec3& viewportPos, Vec3& result, Vec2i topLe
     Matrix44A mProj, mView;
 
     mathMatrixPerspectiveFov(&mProj, GetFov(), GetProjRatio(), GetNearPlane(), GetFarPlane());
-    mathMatrixLookAt(&mView, GetPosition(), GetPosition() + GetViewdir(), Vec3(0, 0, 1));
+    mathMatrixLookAt(&mView, GetPosition(), GetPosition() + GetViewdir(), GetUp());
 
     int viewport[4] = {0, 0, GetViewSurfaceX(), GetViewSurfaceZ()};
 
