@@ -1,0 +1,18 @@
+{
+    "auto" : {
+        "Source": [
+            "Source/VoicePlayerDriverWin.cpp",
+            "Source/VoicePlayerDriverWin.h",
+            "Source/VoiceRecorder.cpp",
+            "Source/VoiceRecorder.h",
+            "Source/OpusVoiceEncoder.cpp",
+            "Source/OpusVoiceEncoder.h",
+            "Source/JitterBuffer.cpp",
+            "Source/JitterBuffer.h",
+            "Source/VoiceChatNetwork.cpp",
+            "Source/VoiceChatNetwork.h",
+            "Source/VoicePlayer.cpp",
+            "Source/VoicePlayer.h"
+        ]
+    }
+}

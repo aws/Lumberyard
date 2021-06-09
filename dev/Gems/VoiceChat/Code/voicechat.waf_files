@@ -1,0 +1,30 @@
+{
+    "none" : {
+        "Source" :[
+            "Source/VoiceChat_precompiled.cpp",
+            "Source/VoiceChat_precompiled.h"
+        ]
+    },
+    "auto" : {
+        "Include" :[
+            "Include/VoiceChat/VoiceChatBus.h",
+            "Include/VoiceChat/VoiceTeamBus.h"
+        ],
+      "Source": [
+        "Source/VoiceChatModule.cpp",
+        "Source/VoiceChatCVars.cpp",
+        "Source/VoiceChatCVars.h",
+        "Source/VoiceChatCommands.cpp",
+        "Source/VoiceChatCommands.h",
+        "Source/VoiceChatNetworkBus.h",
+        "Source/VoicePacket.h",
+        "Source/VoicePlayerDriverBus.h",
+        "Source/VoiceFilters.h",
+        "Source/VoiceTeam.cpp",
+        "Source/VoiceTeam.h",
+        "Source/VoiceRingBuffer.cpp",
+        "Source/VoiceRingBuffer.h",
+        "Source/VoiceCompressionBus.h"
+      ]
+    }
+}

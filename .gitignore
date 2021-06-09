@@ -95,6 +95,7 @@
 !**/wscript
 !**/README
 !**/TODO
+!**/COPYING
 !**/waf
 
 # Make an exception to ignore specific directories

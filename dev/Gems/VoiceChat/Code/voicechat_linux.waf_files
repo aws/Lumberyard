@@ -1,0 +1,12 @@
+{
+    "auto" : {
+        "Source": [
+            "Source/OpusVoiceEncoder.cpp",
+            "Source/OpusVoiceEncoder.h",
+            "Source/JitterBuffer.cpp",
+            "Source/JitterBuffer.h",
+            "Source/VoiceChatNetwork.cpp",
+            "Source/VoiceChatNetwork.h"
+        ]
+    }
+}

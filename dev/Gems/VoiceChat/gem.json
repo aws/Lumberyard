@@ -1,0 +1,24 @@
+{
+    "Dependencies": [
+        {
+            "Uuid": "e70dd59f02f14ea49e6b38434e86ebf1",
+            "VersionConstraints": [
+                "~>0.1.0"
+            ],
+            "_comment": "Microphone"
+        }
+    ],
+    "GemFormatVersion": 4,
+    "Uuid": "f03d0d253f794cf0adc89cf7b7927aa1",
+    "Name": "VoiceChat",
+    "DisplayName": "VoiceChat",
+    "Version": "0.1.0",
+    "Summary": "Basic in-game voice chat.",
+    "Tags": ["GridMate","Microphone","Networking"],
+    "IconPath": "preview.png",
+    "Modules": [
+        {
+            "Type": "GameModule"
+        }
+    ]
+}

@@ -1,0 +1,7 @@
+{
+    "auto": {
+        "Tests": [
+            "Tests/VoiceChatTest.cpp"
+        ]
+    }
+}

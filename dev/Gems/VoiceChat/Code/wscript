@@ -1,0 +1,36 @@
+
+
+def build(bld):
+
+    bld.CryEngineStaticLibrary(
+        target          = 'opus',
+        vs_filter       = 'Gems/VoiceChat',
+        platforms       = ['all'],
+        configurations  = ['all'],
+        file_list       = ['opus.waf_files'],
+        win_file_list   = ['opus_win.waf_files'],
+        defines         = ['HAVE_CONFIG_H', '_CRT_SECURE_NO_WARNINGS'],
+        linux_defines   = ['FLOAT_APPROX'],
+
+        includes        = [bld.Path('Gems/VoiceChat/External/opus/1.3.1'),
+                            bld.Path('Gems/VoiceChat/External/opus/1.3.1/win32'),
+                            bld.Path('Gems/VoiceChat/External/opus/1.3.1/silk'),
+                            bld.Path('Gems/VoiceChat/External/opus/1.3.1/silk/float'),
+                            bld.Path('Gems/VoiceChat/External/opus/1.3.1/celt'),
+                            bld.Path('Gems/VoiceChat/External/opus/1.3.1/include'),
+                            bld.Path('Gems/VoiceChat/External/opus/1.3.1/src')],
+        export_includes = [bld.Path('Gems/VoiceChat/External/opus/1.3.1/include')],
+
+        msvc_cflags   = ['/wd4244']
+    )
+
+    bld.DefineGem(
+        # Add custom build options here
+        vs_filter     = 'Gems/VoiceChat',
+        use           = ['AzFramework', 'Microphone', 'GridMate', 'opus'],
+        win_lib       = ['Winmm'],
+        win_file_list = ['voicechat_win.waf_files'],
+        linux_file_list = ['voicechat_linux.waf_files'],
+
+        clang_cxxflags = ['-Wshadow']
+    )
