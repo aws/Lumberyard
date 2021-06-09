@@ -6239,6 +6239,11 @@ void CD3D9Renderer::RT_RenderScene(int nFlags, SThreadInfo& TI, void(* RenderFun
                 GetTiledShading().UnbindForwardShadingResources();
             }
 
+            if (bAllowPostProcess && CV_r_TranspDepthFixup)
+            {
+                FX_DepthFixupPrepare();
+            }
+            
             if (nFlags & SHDF_ALLOW_WATER)
             {
                 {
@@ -6248,16 +6253,16 @@ void CD3D9Renderer::RT_RenderScene(int nFlags, SThreadInfo& TI, void(* RenderFun
                 }
 
                 FX_RenderWater(RenderFunc);
+                
+                if (bAllowPostProcess && CV_r_TranspDepthFixup)
+                {
+                    FX_DepthFixupMerge();
+                }
             }
 
             {
                 PROFILE_LABEL_SCOPE("TRANSPARENT_AW");
                 PROFILE_PS_TIME_SCOPE_COND(fTimeDIPs[EFSLIST_TRANSP], !bShadowGenSpritePasses);
-
-                if (bAllowPostProcess && CV_r_TranspDepthFixup)
-                {
-                    FX_DepthFixupPrepare();
-                }
 
                 GetTiledShading().BindForwardShadingResources(NULL);
 
