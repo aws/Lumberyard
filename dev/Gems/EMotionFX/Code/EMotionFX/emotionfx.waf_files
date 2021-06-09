@@ -196,6 +196,8 @@
             "Source/AnimGraphManager.h",
             "Source/AnimGraphMotionNode.cpp",
             "Source/AnimGraphMotionNode.h",
+            "Source/AnimGraphParamMotionNode.cpp",
+            "Source/AnimGraphParamMotionNode.h",
             "Source/AnimGraphNetworkSerializer.cpp",
             "Source/AnimGraphNetworkSerializer.h",
             "Source/AnimGraphNode.cpp",

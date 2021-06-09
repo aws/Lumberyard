@@ -72,6 +72,7 @@
 
 #include "AnimGraphBindPoseNode.h"
 #include "AnimGraphMotionNode.h"
+#include "AnimGraphParamMotionNode.h"
 #include "AnimGraphStateMachine.h"
 #include "AnimGraphExitNode.h"
 #include "AnimGraphEntryNode.h"
@@ -126,6 +127,7 @@ namespace EMotionFX
         AnimGraphEntryNode::Reflect(context);
 
         AnimGraphMotionNode::Reflect(context);
+        AnimGraphParamMotionNode::Reflect(context);
         BlendSpaceNode::Reflect(context);
         BlendSpace1DNode::Reflect(context);
         BlendSpace2DNode::Reflect(context);
@@ -203,6 +205,7 @@ namespace EMotionFX
             azrtti_typeid<AnimGraphBindPoseNode>(),
             azrtti_typeid<AnimGraphStateMachine>(),
             azrtti_typeid<AnimGraphMotionNode>(),
+            azrtti_typeid<AnimGraphParamMotionNode>(),
             azrtti_typeid<AnimGraphHubNode>(),
             azrtti_typeid<AnimGraphExitNode>(),
             azrtti_typeid<AnimGraphEntryNode>(),
