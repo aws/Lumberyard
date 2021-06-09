@@ -4239,6 +4239,7 @@ CMaterialCGF* CLoaderCGF::LoadMaterialNameChunk(IChunkFile::ChunkDesc* pChunkDes
                 if (nPhysicalizeType != PHYS_GEOM_TYPE_NONE &&
                     (nPhysicalizeType < PHYS_GEOM_TYPE_DEFAULT || nPhysicalizeType > PHYS_GEOM_TYPE_DEFAULT_PROXY))
                 {
+                    delete pSubMaterial;
                     m_LastError.Format("Invalid physicalize type in material name chunk (0x%08x) in %s, %s", nPhysicalizeType, pMtlCGF->name, m_filename);
                     return NULL;
                 }
