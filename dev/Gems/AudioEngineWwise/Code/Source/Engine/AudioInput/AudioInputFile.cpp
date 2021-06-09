@@ -87,7 +87,7 @@ namespace Audio
                 if (IsOk())
                 {
                     // Allocate a new buffer to hold the data...
-                    m_dataPtr = new AZ::u8[m_dataSize];
+                    m_dataPtr = static_cast<AZ::u8*>(azmalloc(m_dataSize));
 
                     // Read file into internal buffer...
                     size_t bytesRead = fileStream.Read(m_dataSize, m_dataPtr);
@@ -110,7 +110,7 @@ namespace Audio
     {
         if (m_dataPtr)
         {
-            delete [] m_dataPtr;
+            azfree(m_dataPtr);
             m_dataPtr = nullptr;
         }
         m_dataSize = 0;

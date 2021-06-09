@@ -34,11 +34,11 @@ namespace Audio
 
         if (m_config.m_sampleType == AudioInputSampleType::Float && m_config.m_bitsPerSample == 32)
         {
-            m_buffer.reset(new RingBuffer<float>(numSamples));
+            m_buffer.reset(aznew RingBuffer<float>(numSamples));
         }
         else if (m_config.m_sampleType == AudioInputSampleType::Int && m_config.m_bitsPerSample == 16)
         {
-            m_buffer.reset(new RingBuffer<AZ::s16>(numSamples));
+            m_buffer.reset(aznew RingBuffer<AZ::s16>(numSamples));
         }
         else
         {
