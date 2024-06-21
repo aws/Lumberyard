@@ -67,6 +67,14 @@ namespace CloudsGem
         UpdateParticleData(cloudData);
     }
 
+    void CloudGenerator::Destroy()
+    {
+        m_generatedParticles.clear();
+        m_filteredParticles.clear();
+        m_numChildrenEntities = 0;
+        m_totalArea = 0.f;
+    }
+
     float CloudGenerator::GetBoxDimensions(const AZ::EntityId& entityId)
     {
         LmbrCentral::BoxShapeConfiguration boxShapeConfiguration;

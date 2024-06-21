@@ -217,6 +217,7 @@ namespace CloudsGem
         EditorCloudComponentRequestBus::Handler::BusDisconnect();
 
         m_renderNode.AttachToEntity(AZ::EntityId());
+        m_cloudGenerator.Destroy();
 
         EditorComponentBase::Deactivate();
     }

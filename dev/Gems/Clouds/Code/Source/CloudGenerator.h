@@ -21,6 +21,7 @@ namespace CloudsGem
 
         void Generate(CloudParticleData& cloudData, const AZ::EntityId entityId, GenerationFlag flag);
         void Initialize(CloudParticleData& cloudData);
+        void Destroy();
 
         static void Reflect(AZ::ReflectContext* context);
         static void OnAtlasColumnsChanged();

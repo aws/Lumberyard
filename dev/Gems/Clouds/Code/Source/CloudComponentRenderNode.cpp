@@ -174,7 +174,7 @@ namespace CloudsGem
 
             Transform parentTransform = Transform::CreateIdentity();
             EBUS_EVENT_ID_RESULT(parentTransform, m_attachedToEntityId, TransformBus, GetWorldTM);
-            UpdateWorldTransform(parentTransform);
+            SetWorldTransform(parentTransform);
 
             SystemTickBus::Handler::BusConnect();
             CloudComponentBehaviorRequestBus::Handler::BusConnect(m_attachedToEntityId);
@@ -192,13 +192,16 @@ namespace CloudsGem
         }
     }
 
-    void CloudComponentRenderNode::UpdateWorldTransform(const AZ::Transform& entityTransform)
+    void CloudComponentRenderNode::SetWorldTransform(const AZ::Transform & entityTransform)
     {
         m_worldMatrix = AZTransformToLYTransform(entityTransform);
         m_entityWorldMatrix = m_worldMatrix;
+    }
 
+    void CloudComponentRenderNode::UpdateWorldTransform(const AZ::Transform& entityTransform)
+    {
+        SetWorldTransform(entityTransform);
         Update();
-        Refresh();
     }
 
     void CloudComponentRenderNode::Update()

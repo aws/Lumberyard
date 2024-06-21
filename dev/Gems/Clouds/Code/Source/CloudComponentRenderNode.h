@@ -161,6 +161,12 @@ namespace CloudsGem
         CloudParticleData& GetCloudParticleData() { return m_cloudParticleData; }
 
         /**
+        * Sets the render node's world transform properties based on given transform.
+        * @param entityTransform transform from entity
+        */
+        void SetWorldTransform(const AZ::Transform& entityTransform);
+
+        /**
          * Updates the render node's world transform based on the entity.
          * @param entityTransform transform from entity
          */
