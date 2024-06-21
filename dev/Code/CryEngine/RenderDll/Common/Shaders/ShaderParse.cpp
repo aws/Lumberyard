@@ -737,6 +737,7 @@ uint64 CShaderMan::mfGetShaderGlobalMaskGenFromString(const char* szShaderGen)
         {
             nMaskGen |= pIter->second;
         }
+        AZ_Warning("Shaders", pIter != pEnd, "Failed to find property \"%s\". Shader macro is ignored.", pCurrFlag);
     }
 
     return nMaskGen;
