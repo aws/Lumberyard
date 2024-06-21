@@ -358,7 +358,6 @@ void CPerfHUD::InitUI(IMiniGUI* pGUI)
     CreateCVarMenuItem(pDebugMenu, "Terrain", "e_Terrain", 0, 1);
     CreateCVarMenuItem(pDebugMenu, "Brushes", "e_Brushes", 0, 1);
     CreateCVarMenuItem(pDebugMenu, "Vegetation", "e_Vegetation", 0, 1);
-    CreateCVarMenuItem(pDebugMenu, "Characters", "ca_DrawChr", 0, 1);
     CreateCVarMenuItem(pDebugMenu, "Coverage Buffer", "e_CoverageBuffer", 0, 1);
     CreateCVarMenuItem(pDebugMenu, "Sun", "e_Sun", 0, 1);
     CreateCVarMenuItem(pDebugMenu, "Unlit", "r_Unlit", 0, 1);
@@ -414,7 +413,6 @@ void CPerfHUD::InitUI(IMiniGUI* pGUI)
     }
 
     CreateCVarMenuItem(pMenu, "Profiler", "profile", 0, 1);
-    CreateCVarMenuItem(pMenu, "Thread Summary", "r_showmt", 0, 1);
     CreateCVarMenuItem(pMenu, "Track File Access", "sys_PakLogInvalidFileAccess", 0, 1);
 
     //FPS Buckets
