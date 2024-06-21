@@ -20,6 +20,7 @@
 #include <AzToolsFramework/API/ToolsApplicationAPI.h>
 #include <EMotionFX/Source/Parameter/BoolParameter.h>
 #include <EMotionFX/Source/Parameter/FloatParameter.h>
+#include <EMotionFX/Source/Parameter/StringParameter.h>
 #include <EMotionFX/Source/Parameter/IntParameter.h>
 #include <EMotionFX/Tools/EMotionStudio/EMStudioSDK/Source/EMStudioManager.h>
 #include <EMotionFX/Tools/EMotionStudio/EMStudioSDK/Source/MainWindow.h>
@@ -239,7 +240,8 @@ namespace EMotionFX
         {
             return (azrtti_istypeof<FloatParameter>(param) ||
                     azrtti_istypeof<IntParameter>(param) ||
-                    azrtti_istypeof<BoolParameter>(param));
+                    azrtti_istypeof<BoolParameter>(param) ||
+                    azrtti_istypeof<StringParameter>(param));
         }
 
         //////////////////////////////////////////////////////////////////////////
@@ -311,6 +313,10 @@ namespace EMotionFX
                         const EMotionFX::BoolParameter* boolParam = static_cast<const EMotionFX::BoolParameter*>(param);
                         m_parameterDefaults.m_parameters.emplace_back(aznew AZ::ScriptPropertyBoolean(paramName.c_str(), boolParam->GetDefaultValue()));
                     }
+                    else if (azrtti_istypeof<EMotionFX::StringParameter>(param))
+                    {
+                        const EMotionFX::StringParameter* stringParam = static_cast<const EMotionFX::StringParameter*>(param);
+                        m_parameterDefaults.m_parameters.emplace_back(aznew AZ::ScriptPropertyString(paramName.c_str(), stringParam->GetDefaultValue().c_str()));
                     else
                     {
                         AZ_Assert(!IsSupportedScriptPropertyType(param), "This value parameter of this type ('%s') should not be supported. Please update the IsSupportedScriptPropertyType() method.", param->GetTypeDisplayName());

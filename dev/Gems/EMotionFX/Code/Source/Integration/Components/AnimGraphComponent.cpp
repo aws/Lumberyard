@@ -451,6 +451,10 @@ namespace EMotionFX
                     {
                         SetNamedParameterBool(paramName, static_cast<AZ::ScriptPropertyBoolean*>(parameter)->m_value);
                     }
+                    else if (azrtti_istypeof<AZ::ScriptPropertyString>(parameter))
+                    {
+                        SetNamedParameterString(paramName, static_cast<AZ::ScriptPropertyString*>(parameter)->m_value.c_str());
+                    }
                     else
                     {
                         AZ_Warning("EMotionFX", false, "Invalid type for anim graph parameter \"%s\".", paramName);
