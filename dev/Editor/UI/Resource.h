@@ -371,6 +371,7 @@
 #define ID_TOOLS_ENABLEFILECHANGEMONITORING        34185
 #define ID_FILE_OPEN_LEVEL                         34196
 #define ID_FILE_SAVE_LEVEL                         34197
+#define ID_FILE_RELOAD_LEVEL                       37198
 #define ID_PANEL_LAYERS_SAVE_EXTERNAL_LAYERS       34198
 #define ID_TV_SYNC_TO_BASE                         34199
 #define ID_TV_SYNC_FROM_BASE                       34200

@@ -926,6 +926,11 @@ void MainWindow::InitActions()
         .SetMetricsIdentifier("MainEditor", "OpenLevel")
         .SetStatusTip(tr("Open an existing level"))
         .RegisterUpdateCallback(cryEdit, &CCryEditApp::OnUpdateFileOpen);
+    am->AddAction(ID_FILE_RELOAD_LEVEL, tr("Reload Level"))
+        .SetShortcut(tr("Ctrl+R"))
+        .SetMetricsIdentifier("MainEditor", "ReloadLevel")
+        .SetStatusTip(tr("Reload the current level"))
+        .RegisterUpdateCallback(cryEdit, &CCryEditApp::OnUpdateReloadLevel);
 #ifdef ENABLE_SLICE_EDITOR
     am->AddAction(ID_FILE_NEW_SLICE, tr("New Slice"))
         .SetMetricsIdentifier("MainEditor", "NewSlice")

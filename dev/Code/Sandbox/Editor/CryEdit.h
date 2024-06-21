@@ -219,6 +219,7 @@ public:
     // Implementation
     void OnCreateLevel();
     void OnOpenLevel();
+    void OnReloadLevel();
     void OnCreateSlice();
     void OnOpenSlice();
     void OnAppAbout();
@@ -412,6 +413,7 @@ public:
     void OnFileConvertLegacyEntities();
     void OnUpdateDocumentReady(QAction* action);
     void OnUpdateFileOpen(QAction* action);
+    void OnUpdateReloadLevel(QAction* action);
     void OnUpdateCurrentLayer(QAction* action);
     void OnUpdateNonGameMode(QAction* action);
     void OnUpdateNewLevel(QAction* action);
@@ -473,6 +475,10 @@ private:
     //! can happen after the level is loaded. This method will wait for a few idle updates and then
     //! display the load errors to ensure all errors are displayed properly.
     void DisplayLevelLoadErrors();
+
+    // Performs any work before and after opening a level file
+    template<class DoOpen>
+    CCryEditDoc* OpenDocumentFileWrapper(DoOpen&& doOpen);
 
 #if AZ_TESTS_ENABLED
     //! Runs tests in the plugin specified as the file argument to the command line,

@@ -384,6 +384,13 @@ QMenu* LevelEditorMenuHandler::CreateFileMenu()
         DisableActionWhileLevelChanges(fileOpenLevel, e);
     }));
 
+    // Reload level
+    auto fileReloadLevel = fileMenu.AddAction(ID_FILE_RELOAD_LEVEL);
+    GetIEditor()->RegisterNotifyListener(new EditorListener(fileReloadLevel, [fileReloadLevel](EEditorNotifyEvent e)
+    {
+        DisableActionWhileLevelChanges(fileReloadLevel, e);
+    }));
+
 #ifdef ENABLE_SLICE_EDITOR
     // New slice
     auto fileNewSlice = fileMenu.AddAction(ID_FILE_NEW_SLICE);
