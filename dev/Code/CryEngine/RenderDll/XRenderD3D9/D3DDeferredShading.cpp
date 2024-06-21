@@ -2473,7 +2473,7 @@ void CDeferredShading::PrepareClipVolumeData(bool& bOutdoorVisible)
         states |= isGmemResolve ? GS_NOCOLMASK_R : GS_NOCOLMASK_G;
         rd->FX_SetState(states);
 
-        CTexture::SetSamplerState(4, m_nTexStatePoint, eHWSC_Pixel);
+        CTexture::SetSamplerState(m_nTexStatePoint, 4, eHWSC_Pixel);
         rd->m_DevMan.BindSRV(eHWSC_Pixel, gcpRendD3D->m_pZBufferStencilReadOnlySRV, 4);
 
         GetUtils().DrawQuadFS(CShaderMan::s_shDeferredShading, false, m_pLBufferDiffuseRT->GetWidth(), m_pLBufferDiffuseRT->GetHeight());
