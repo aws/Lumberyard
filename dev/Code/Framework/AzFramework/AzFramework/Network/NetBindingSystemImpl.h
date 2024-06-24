@@ -103,7 +103,7 @@ namespace AzFramework
          * \breif a cache of entities that might be networked at some point
          * \note they might be bound and unbound if their replicas leave and come back in the view
          */
-        AZStd::vector<AZ::Entity*> m_boundEntities;
+        AZStd::vector<AZ::EntityId> m_boundEntities;
 
         /**
          * \brief identifies which slice instance the instantiation will be performed for

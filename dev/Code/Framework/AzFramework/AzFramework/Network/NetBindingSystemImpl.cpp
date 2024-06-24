@@ -65,10 +65,11 @@ namespace AzFramework
             EBUS_EVENT(GameEntityContextRequestBus, CancelDynamicSliceInstantiation, m_ticket);
         }
 
-        for (AZ::Entity* entity : m_boundEntities)
+        for (AZ::EntityId boundEntityId : m_boundEntities)
         {
-            AZ_ExtraTracePrintf("NetBindingSystemImpl", "Cleanup - deleting %llu\n", entity->GetId());
-            EBUS_EVENT(GameEntityContextRequestBus, DestroyGameEntity, entity->GetId());
+			AZ_Assert(boundEntityId != AZ::SystemEntityId, "NetBindingSliceInstantiationHandler is destroying the system entity");
+			AZ_ExtraTracePrintf("NetBindingSystemImpl", "Cleanup - deleting %llu\n", boundEntityId);
+			EBUS_EVENT(GameEntityContextRequestBus, DestroyGameEntity, boundEntityId);
         }
     }
 
@@ -123,9 +124,12 @@ namespace AzFramework
 
     bool NetBindingSliceInstantiationHandler::HasActiveEntities() const
     {
-        for (const AZ::Entity* entity : m_boundEntities)
+		for (const AZ::EntityId boundEntityId : m_boundEntities)
         {
-            if (entity->GetState() == AZ::Entity::ES_ACTIVE)
+			AZ::Entity* entity = nullptr;
+			AZ::ComponentApplicationBus::BroadcastResult(entity, &AZ::ComponentApplicationRequests::FindEntity, boundEntityId);
+
+            if (entity && entity->GetState() == AZ::Entity::ES_ACTIVE)
             {
                 return true;
             }
@@ -196,7 +200,7 @@ namespace AzFramework
             }
 
             AZ_ExtraTracePrintf("NetBindingSystemImpl", "Adding %llu \n", sliceEntity->GetId());
-            m_boundEntities.push_back(sliceEntity);
+			m_boundEntities.push_back(sliceEntity->GetId());
         }
 
         m_state = State::Spawned;
@@ -247,8 +251,8 @@ namespace AzFramework
         }
 
         const AZ::EntityId actualRuntimeEntityId = actualRuntimeIter->second;
-        const auto itCache = AZStd::find_if(m_boundEntities.begin(), m_boundEntities.end(), [&actualRuntimeEntityId](AZ::Entity* entity) {
-            return entity->GetId() == actualRuntimeEntityId;
+		const auto itCache = AZStd::find_if(m_boundEntities.begin(), m_boundEntities.end(), [&actualRuntimeEntityId](AZ::EntityId boundEntityId) {
+            return boundEntityId == actualRuntimeEntityId;
         });
 
         if (itCache != m_boundEntities.end())
@@ -495,13 +499,19 @@ namespace AzFramework
                     if (itSliceHandler != itCurrentContextQueue->second.end())
                     {
                         NetBindingSliceInstantiationHandler& sliceHandler = itSliceHandler->second;
-                        for (AZ::Entity* entity : sliceHandler.m_boundEntities)
+                        for (AZ::EntityId boundEntityId : sliceHandler.m_boundEntities)
                         {
-                            if (entity->GetId() == entityId)
-                            {
-                                entity->Deactivate();
-                                return;
-                            }
+							if(boundEntityId == entityId)
+							{
+								AZ::Entity* entity = nullptr;
+								AZ::ComponentApplicationBus::BroadcastResult(entity, &AZ::ComponentApplicationRequests::FindEntity, boundEntityId);
+
+                            	if (entity)
+                            	{
+                                	entity->Deactivate();
+                                	return;
+                            	}
+							}
                         }
 
                         // clean any relevant bind requests as well
