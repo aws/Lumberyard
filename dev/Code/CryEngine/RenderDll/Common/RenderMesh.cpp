@@ -1665,6 +1665,7 @@ IIndexedMesh* CRenderMesh::GetIndexedMesh(IIndexedMesh* pIdxMesh)
     strided_pointer<SMeshNormal> pNorm;
 
     pVtx.data = (Vec3*)GetPosPtr(pVtx.iStride, FSL_READ);
+    pNorm.data = (SMeshNormal*)GetNormPtr(pNorm.iStride, FSL_READ);
 
     if (CRenderer::CV_r_readMeshNormals)
     {
