@@ -292,9 +292,9 @@ namespace PhysX
                 return {};
             }
 
-            if (subdivisions < MinFrustumSubdivisions || subdivisions > MaxFrustumSubdivisions)
+            if (subdivisions < MinFrustumSubdivisions)
             {
-                AZ_Error("PhysX", false, "Frustum subdivision count %u is not in [%u, %u] range", subdivisions, MinFrustumSubdivisions, MaxFrustumSubdivisions);
+                AZ_Error("PhysX", false, "Frustum subdivision count %u is not at least %u", subdivisions, MinFrustumSubdivisions);
                 return {};
             }
                 

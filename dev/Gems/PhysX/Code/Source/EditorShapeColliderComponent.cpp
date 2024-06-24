@@ -78,7 +78,6 @@ namespace PhysX
                         ->Attribute(AZ::Edit::Attributes::Visibility, AZ::Edit::PropertyVisibility::ShowChildrenOnly)
                     ->DataElement(AZ::Edit::UIHandlers::Default, &EditorShapeColliderComponent::m_subdivisionCount, "Subdivision count", "Number of angular subdivisions in the PhysX cylinder")
                         ->Attribute(AZ::Edit::Attributes::Min, Utils::MinFrustumSubdivisions)
-                        ->Attribute(AZ::Edit::Attributes::Max, Utils::MaxFrustumSubdivisions)
                         ->Attribute(AZ::Edit::Attributes::ChangeNotify, &EditorShapeColliderComponent::OnSubdivisionCountChange)
                         ->Attribute(AZ::Edit::Attributes::Visibility, &EditorShapeColliderComponent::SubdivisionCountVisibility)
                     ;
@@ -415,34 +414,72 @@ namespace PhysX
             return;
         }
 
-        AZStd::optional<AZStd::vector<AZ::Vector3>> points = Utils::CreatePointsAtFrustumExtents(height, radius, radius, m_subdivisionCount);
+        AZStd::optional<AZStd::vector<AZ::Vector3>> mbPoints = Utils::CreatePointsAtFrustumExtents(height, radius, radius, m_subdivisionCount);
 
-        if (!points.has_value())
+        if (!mbPoints.has_value())
         {
             AZ_Warning("PhysX", false, "Could not generate cylinder shape collider.");
             return;
         }
+        const auto& points = mbPoints.value();
 
-        AZStd::optional<Physics::CookedMeshShapeConfiguration> shapeConfig = Utils::CreatePxCookedMeshConfiguration(points.value(), scale);
-
-        if (shapeConfig.has_value())
+        // Temporary to hold new shape configs, in case anything below fails, keep the old shape configs
+        decltype(m_shapeConfigs) shapeConfigs;
+        const auto AddMesh = [&shapeConfigs](const AZStd::vector<AZ::Vector3>& pts)
         {
-            if (m_shapeType != ShapeType::Cylinder)
+            if (AZStd::optional<Physics::CookedMeshShapeConfiguration> shapeConfig = Utils::CreatePxCookedMeshConfiguration(pts, AZ::Vector3::CreateOne()))
             {
-                m_shapeConfigs.clear();
-                m_shapeConfigs.push_back(AZStd::make_shared<Physics::CookedMeshShapeConfiguration>(shapeConfig.value()));
-
-                m_shapeType = ShapeType::Cylinder;
+                shapeConfigs.push_back(AZStd::make_shared<Physics::CookedMeshShapeConfiguration>(shapeConfig.value()));
+                return true;
             }
             else
             {
-                Physics::CookedMeshShapeConfiguration& configuration =
-                    static_cast<Physics::CookedMeshShapeConfiguration&>(*m_shapeConfigs.back());
-                configuration = Physics::CookedMeshShapeConfiguration(shapeConfig.value());
+                AZ_Warning("PhysX", false, "Could not generate cylinder shape collider.");
+                return false;
+            }
+        };
+
+        // PhysX convex meshes are limited to 256 vertices
+        // Split meshes into approximately equal groups of this many vertices
+        static const size_t VertexLimit = 256;
+        const size_t totalVertices = points.size();
+        const size_t nMeshes = (size_t)::ceilf((float)totalVertices / (float)VertexLimit);
+        if (nMeshes == 1)
+        {
+            if (!AddMesh(points)) return;
+        }
+        else
+        {
+            // The number of vertices in each arc shape (splitting the cylinder into arcs of equal size)
+            const size_t groupSize = (size_t)::ceilf((float)totalVertices / (float)nMeshes);
+
+            // The points for a regular polygon prism on the interior of the cylinder, whose number of sides is nMeshes
+            AZStd::vector<AZ::Vector3> insidePiece;
+
+            // This handles outer sections of the cylinder, i.e. extrusions of arcs of the circle faces
+            for (size_t startVertex = 0; startVertex < totalVertices; startVertex += groupSize)
+            {
+                const size_t endVertex = AZ::GetMin(startVertex + groupSize, totalVertices);
+                const size_t nVertices = endVertex - startVertex;
+                AZ_Assert(startVertex + nVertices <= totalVertices, AZ_FUNCTION_SIGNATURE " - bad vertex index");
+
+                // Add mesh shape for this arc
+                if (!AddMesh(AZStd::vector<AZ::Vector3>(&points[startVertex], &points[startVertex] + nVertices))) return;
+
+                // Add the first and last edge of the cylinder arc
+                insidePiece.push_back(points[startVertex]);
+                insidePiece.push_back(points[startVertex+1]);
+                insidePiece.push_back(points[startVertex+nVertices-1]);
+                insidePiece.push_back(points[startVertex+nVertices-2]);
             }
 
-            CreateStaticEditorCollider();
+            // This handles the regular polygonal prism on the interior
+            if (!AddMesh(insidePiece)) return;
         }
+
+        m_shapeConfigs.swap(shapeConfigs);
+        m_shapeType = ShapeType::Cylinder;
+        CreateStaticEditorCollider();
     }
 
     AZ::u32 EditorShapeColliderComponent::OnSubdivisionCountChange()
@@ -763,13 +800,13 @@ namespace PhysX
 
         else if (m_shapeType == ShapeType::Cylinder)
         {
-            if (!m_shapeConfigs.empty())
+            AZ::u32 shapeIndex = 0;
+            for (const auto shapeConfig : m_shapeConfigs)
             {
-                const AZ::u32 shapeIndex = 0;
                 const AZ::Vector3 uniformScale = Utils::GetUniformScale(GetEntityId());
-                Physics::ShapeConfiguration* shapeConfig = m_shapeConfigs[0].get();
                 m_colliderDebugDraw.BuildMeshes(*shapeConfig, shapeIndex);
-                m_colliderDebugDraw.DrawMesh(debugDisplay, m_colliderConfig, *static_cast<Physics::CookedMeshShapeConfiguration*>(shapeConfig), uniformScale, shapeIndex);
+                m_colliderDebugDraw.DrawMesh(debugDisplay, m_colliderConfig, *static_cast<Physics::CookedMeshShapeConfiguration*>(shapeConfig.get()), uniformScale, shapeIndex);
+                ++shapeIndex;
             }            
         }
 
