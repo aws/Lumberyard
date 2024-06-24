@@ -29,7 +29,7 @@ function MakeDerivedEntity( _DerivedClass,_Parent )
 	-- Add derived class properties.
 	mergef(_DerivedClass.Properties,derivedProperties,1);
 
-	_DerivedClass.__super = BasicEntity;
+	_DerivedClass.__super = _Parent;
 	return _DerivedClass;
 end
 
