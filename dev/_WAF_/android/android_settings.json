@@ -7,7 +7,7 @@
 
     "BUILD_TOOLS_VER" : "latest",
 
-    "SDK_VERSION" : "android-28",
+    "SDK_VERSION" : "android-29",
     "NDK_PLATFORM" : "android-21",
 
     "BUILD_ENVIRONMENT" : "Development"
