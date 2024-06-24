@@ -83,6 +83,11 @@ namespace CloudsGem
         void Refresh() override;
         void OnMaterialAssetChanged() override;
 
+        /////////////////////////////////////////////////////////
+        // EditorVisibilityNotificationBus
+        /////////////////////////////////////////////////////////
+        void OnEntityVisibilityChanged(bool visibility) override;
+
         /** 
          * Fills out the provided array with services provided by this component
          */

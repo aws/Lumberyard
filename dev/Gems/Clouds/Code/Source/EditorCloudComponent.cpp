@@ -205,6 +205,15 @@ namespace CloudsGem
         AZ::EntityBus::Handler::BusConnect(entityId);
         AzToolsFramework::EditorVisibilityNotificationBus::Handler::BusConnect(entityId);
         AzFramework::EntityDebugDisplayEventBus::Handler::BusConnect(entityId);
+
+        {
+            bool isVisible = true;
+            AzToolsFramework::EditorVisibilityRequestBus::EventResult(
+                isVisible,
+                entityId,
+                &AzToolsFramework::EditorVisibilityRequestBus::Events::GetCurrentVisibility);
+            OnEntityVisibilityChanged(isVisible);
+        }
     }
 
     void EditorCloudComponent::Deactivate()
@@ -321,6 +330,18 @@ namespace CloudsGem
     void EditorCloudComponent::OnMaterialAssetChanged()
     {
         m_renderNode.OnMaterialAssetChanged();
+    }
+
+    void EditorCloudComponent::OnEntityVisibilityChanged(bool visible)
+    {
+        if (visible)
+        {
+            m_renderNode.m_dwRndFlags &= ~ERF_HIDDEN;
+        }
+        else
+        {
+            m_renderNode.m_dwRndFlags |= ERF_HIDDEN;
+        }
     }
 
     void EditorCloudComponent::Refresh()
