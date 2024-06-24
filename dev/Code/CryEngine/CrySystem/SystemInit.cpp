@@ -3389,6 +3389,22 @@ void CSystem::InitLocalization()
     }
 
     string language = m_pLocalizationManager->LangNameFromPILID(languageID);
+
+    //Check if language was set in settings or user.cfg
+    pCVar = m_env.pConsole != 0 ? m_env.pConsole->GetCVar("g_language") : 0; 
+    if (pCVar)
+    {
+        string languageInCvar = pCVar->GetString();
+        if (m_pLocalizationManager->PILIDFromLangName(languageInCvar.c_str()) != ILocalizationManager::EPlatformIndependentLanguageID::ePILID_MAX_OR_INVALID)
+        {
+            language = languageInCvar; //Language was set and valid so we use that one
+        }
+        else
+        {
+            pCVar->Set(language); //Language is invalid, set default in CVar
+        }
+    }    
+
     m_pLocalizationManager->SetLanguage(language.c_str());
     if (m_pLocalizationManager->GetLocalizationFormat() == 1)
     {
