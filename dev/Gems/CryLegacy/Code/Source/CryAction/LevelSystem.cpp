@@ -1575,7 +1575,7 @@ ILevel* CLevelSystem::LoadLevelInternal(const char* _levelName)
 
             XmlNodeRef objectsNode = rootNode->findChild("Objects");
 
-            if (objectsNode)
+            if (objectsNode && objectsNode->getChildCount() > 0)
             {
                 gEnv->pEntitySystem->LoadEntities(objectsNode, true);
             }
