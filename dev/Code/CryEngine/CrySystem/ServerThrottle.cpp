@@ -18,6 +18,10 @@
 #include "ITimer.h"
 #include "IConsole.h"
 
+#if defined(AZ_PLATFORM_LINUX)
+#include <sys/times.h>
+#endif
+
 #if defined(WIN32)
 static float ftdiff(const FILETIME& b, const FILETIME& a)
 {
@@ -73,6 +77,55 @@ private:
     FILETIME m_lastKernel, m_lastUser, m_lastTime;
     int m_nCPUs;
 };
+#elif defined(AZ_PLATFORM_LINUX)
+class CCPUMonitor
+{
+public:
+    CCPUMonitor(ISystem* pSystem, int nCPUs)
+        : m_lastUpdateTime(0.0f)
+        , m_pTimer(pSystem->GetITimer())
+        , m_nCPUs(nCPUs)
+    {
+        struct tms timeSample;
+
+        m_lastCPU = times(&timeSample);
+        m_lastSysCPU = timeSample.tms_stime;
+        m_lastUserCPU = timeSample.tms_utime;
+    }
+
+    float* Update()
+    {
+        auto frameTime = m_pTimer->GetFrameStartTime();
+        if (frameTime - m_lastUpdateTime > 5.0f)
+        {
+            m_lastUpdateTime = frameTime;
+
+            struct tms timeSample;
+            clock_t now = times(&timeSample);
+
+            double percent = (timeSample.tms_stime - m_lastSysCPU) + (timeSample.tms_utime - m_lastUserCPU);
+            percent /= (now - m_lastCPU);
+
+            m_cpuTotal = (percent * 100.0f) / m_nCPUs;
+
+            return &m_cpuTotal;
+        }
+
+        // means no actual data in monitor
+        return nullptr;
+    }
+
+private:
+    float m_cpuTotal { 0.0f };
+
+    int m_nCPUs{ 0 };
+    ITimer* m_pTimer{ nullptr };
+    CTimeValue m_lastUpdateTime;
+
+    clock_t m_lastCPU{ 0 };
+    clock_t m_lastSysCPU{ 0 };
+    clock_t m_lastUserCPU{ 0 };
+};
 #else
 class CCPUMonitor
 {
@@ -85,6 +138,9 @@ public:
 
 CServerThrottle::CServerThrottle(ISystem* pSys, int nCPUs)
 {
+    int cpuCoresLimit = pSys->GetIConsole()->GetCVar("sv_DedicatedCPUCores")->GetIVal();
+    nCPUs = (cpuCoresLimit > 0) ? std::min(nCPUs, cpuCoresLimit) : nCPUs;
+
     m_pCPUMonitor.reset(new CCPUMonitor(pSys, nCPUs));
     m_pDedicatedMaxRate = pSys->GetIConsole()->GetCVar("sv_DedicatedMaxRate");
     m_pDedicatedCPU = pSys->GetIConsole()->GetCVar("sv_DedicatedCPUPercent");
