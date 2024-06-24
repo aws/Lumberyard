@@ -40,6 +40,7 @@
 #include "Util/AutoDirectoryRestoreFileDialog.h"
 #include "QtUI/WaitCursor.h"
 #include "Maestro/Types/AnimParamType.h"
+#include "Material/MaterialManager.h"
 
 #include "QtUtil.h"
 
@@ -2079,9 +2080,27 @@ bool CExportManager::ImportFromFile(const char* filename)
 bool CExportManager::ExportSingleStatObj(IStatObj* pStatObj, const char* filename)
 {
     Export::CObject* pObj = new Export::CObject(Path::GetFileName(filename).toUtf8().data());
+
+    // the exporter uses m_pBaseObj to find the material and submesh settings
+    // so we create a temporary brush editor object and set the material we want to use 
+    CBaseObjectPtr editorObject = GetIEditor()->NewObject("Brush", "", "TempExportObject", 0.f, 0.f, 0.f, false);
+    if (editorObject)
+    {
+        auto material = pStatObj->GetMaterial();
+        CMaterial* editorMaterial = GetIEditor()->GetMaterialManager()->LoadMaterial(material->GetName());
+        editorObject->SetMaterial(editorMaterial);
+        m_pBaseObj = editorObject;
+    }
     AddStatObj(pObj, pStatObj);
     m_data.m_objects.push_back(pObj);
     ExportToFile(filename, true);
+
+    if (editorObject)
+    {
+        m_pBaseObj = nullptr;
+        GetIEditor()->DeleteObject(editorObject);
+    }
+
     return true;
 }
 

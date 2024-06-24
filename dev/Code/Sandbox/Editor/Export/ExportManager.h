@@ -192,7 +192,7 @@ private:
     TExporters m_exporters;
     Export::CData m_data;
     bool m_isPrecaching;
-    bool m_isOccluder;
+    bool m_isOccluder = false; // if true, export lower resolution LOD if available
     float m_fScale;
     TObjectMap m_objectMap;
     bool m_bAnimationExport;
