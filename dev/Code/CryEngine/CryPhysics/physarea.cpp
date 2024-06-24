@@ -2351,8 +2351,7 @@ IPhysicalEntity* CPhysicalWorld::AddArea(Vec3* pt, int npt, float zmin, float zm
 
     pArea->m_offset = pArea->m_offset0 + pos;
     pArea->m_R = Matrix33(q) * pArea->m_R0;
-    memset(pArea->m_pMask = new unsigned int[((npt - 1 >> 5) + 1) * (MAX_PHYS_THREADS + 1)], 0, ((npt - 1 >> 5) + 1) * (MAX_PHYS_THREADS + 1) * sizeof(int));
-
+ 
     sz = Matrix33(pArea->m_R).Fabs() * pArea->m_size0 * scale;
     center = pArea->m_offset + pArea->m_R * (BBox[0] + BBox[1]) * (pArea->m_scale * 0.5f);
     pArea->m_BBox[0] = center - sz;

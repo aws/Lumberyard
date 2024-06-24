@@ -129,6 +129,12 @@ void SRemoteServer::ClientDone(SRemoteClient* pClient)
         {
             it->pClient->Stop();
             delete it->pClient;
+            while (!it->pEvents->empty())
+            {
+                auto pEvent = it->pEvents->front();
+                it->pEvents->pop_front();
+                delete pEvent;
+            }
             delete it->pEvents;
             m_clients.erase(it);
             break;
