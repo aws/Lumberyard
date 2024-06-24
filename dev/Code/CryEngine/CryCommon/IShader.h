@@ -915,6 +915,7 @@ public:
     uint16                      m_nMDV;                 //!< Vertex modifier flags for Shader.
     uint16                      m_nRenderQuality;       //!< 65535 - full quality, 0 - lowest quality, used by CStatObj
     int16                       m_nTextureID;           //!< Custom texture id.
+    int16                       m_nParticleGlowTexID{ -1 };           //!< Custom texture id.
 
     union
     {

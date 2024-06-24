@@ -4663,6 +4663,10 @@ void CD3D9Renderer::FX_FlushShader_General()
             {
                 rd->FX_SetupShadowsForTransp();
             }
+            if (rRP.m_pCurObject->m_nParticleGlowTexID > 0)
+            {
+                rRP.m_FlagsShader_RT |= g_HWSR_MaskBit[HWSR_SAMPLE0];
+            }
         }
         else if (ef->m_Flags2 & EF2_ALPHABLENDSHADOWS)
         {

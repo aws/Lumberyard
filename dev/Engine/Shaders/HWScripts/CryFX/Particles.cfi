@@ -1,0 +1,1266 @@
+
+float4 VisionParams 					: PI_VisionParams;
+float4 ParticleEmissiveColor : PI_ParticleEmissiveColor;
+
+CLOUD_SHADOW_MAP
+
+sampler2D envMapSamplerRefr
+{
+	Texture = $SceneTarget;
+	MinFilter = POINT;
+	MagFilter = POINT;
+	MipFilter = POINT;
+	AddressU = Clamp;
+	AddressV = Clamp;
+	sRGBLookup = true;
+};
+
+sampler2D particlesThicknessSampler
+{
+	Texture = $BackBufferScaled_d4;
+	MinFilter = LINEAR;
+	MagFilter = LINEAR;
+	MipFilter = LINEAR;
+	AddressU = Clamp;
+	AddressV = Clamp;
+};
+
+sampler2D gradientMapSampler = sampler_state
+{
+	Texture = EngineAssets/Textures/TexelsPerMeterGrad.dds;
+	MinFilter = LINEAR;
+	MagFilter = LINEAR;
+	MipFilter = NONE;
+	AddressU = Clamp;
+	AddressV = Clamp;
+};
+
+samplerCUBE environmentCMSampler = sampler_state
+{
+	Texture = $FromRE0;
+	AddressU = Clamp;
+	AddressV = Clamp;
+	MinFilter = LINEAR;
+	MagFilter = LINEAR;
+	MipFilter = LINEAR;
+};
+
+//////////////////////////////////////////////////////////////////////////////////////////////////
+
+struct OutputVS
+{
+	float4 HPosition  : POSITION;
+
+	float4 baseTC    : TEXCOORDN;   // zw = orig tc
+
+#ifdef %_RT_SAMPLE0
+    float4 glowTC    : TEXCOORDN;
+#endif
+
+#if %_RT_ANIM_BLEND || %_RT_PARTICLE_SHADOW
+	float4 blendTC   : TEXCOORDN; // w: sun shadow
+#endif
+
+	half4 alphaClip  : TEXCOORDN;
+
+#if (FEATURE_PARTICLES_TESSELLATION && !%_RT_NO_TESSELLATION) || %BUMP_MAP || %_RT_GLOBAL_ILLUMINATION || USE_MATERIAL
+	half4 vWorldPos : TEXCOORDN;
+#endif
+#if USE_MATERIAL
+	half4 vTangent  : TEXCOORDN;
+#endif
+
+#if !%REFRACTION
+	#if %_RT_FOG
+		half4 localFogColor : TEXCOORDN;
+	#endif
+	#if %_RT_MOTION_BLUR
+		half4 vMotionBlur : TEXCOORDN;
+		half3 vMotionBlur2 : TEXCOORDN;
+	#endif
+#endif
+
+	float4 vNormal  : TEXCOORDN;
+	half4 SHBasis0 : TEXCOORDN;
+	half4 SHBasis1 : TEXCOORDN;
+	half4 SHBasis2 : TEXCOORDN;
+};
+
+#if %_RT_MULTI_LAYER_ALPHA_BLEND
+#include "MultiLayerAlphaBlend.cfi"
+RasterizerOrderedStructuredBuffer<MLABPackedLayer> MultiLayerAlphaBlendBuffer : register(u5); // per-layer pixel data for alpha
+#endif
+
+/////////////////////////////////////////////////
+
+void ParticlesDebug( inout SParticleVertex OUT, in float3 vCenter, in float3 vVertexPos )
+{
+#if %_RT_DEBUG0
+	// Aproximate quad screen space area
+	float fRadius =   length( vVertexPos.xyz - vCenter.xyz );
+
+	float4 vCenterScreenTC = HPosToScreenTC( mul(PerView_ViewProjMatr, float4(vCenter.xyz, 1)) );
+	float4 vUpScreenTC = HPosToScreenTC( mul(PerView_ViewProjMatr, float4(vCenter.xyz + PerView_ViewBasisY.xyz * fRadius, 1)) );
+
+	vCenterScreenTC /= vCenterScreenTC.w;
+	vUpScreenTC /= vUpScreenTC.w;
+
+	const float fScreenCoverageRatio = 15.h; // 15% of screen area. todo: expose via cvar
+	OUT.baseTC.xy = saturate( length(vUpScreenTC.xy - vCenterScreenTC.xy) * fScreenCoverageRatio );
+#endif
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////////////
+void Particle_Convert_TC( float4 baseTC, inout SParticleVertex OUT )
+{
+	// Save original coords
+	OUT.baseTC.zw = baseTC.xy;
+	float2 temp = baseTC.xy;
+
+	[branch]
+	if (TexTileSize.x * TexTileSize.y < 1.0)
+	{
+		// Apply tiling params to TCs
+		OUT.baseTC.xy = baseTC.xy * TexTileSize.xy;
+		
+#if %_RT_ANIM_BLEND
+		// Compute coords of 2nd blended tile
+		OUT.blendTC.xy = OUT.baseTC.xy;
+        float tileCurrent = baseTC.z * 255.0;
+		float tileBlend = tileCurrent + 1.0;
+		
+		// Detect wrap to 1st frame when looping
+        tileBlend = (((tileBlend - TexTileSize.w) >= TexTileSize.z) && ((tileCurrent - TexTileSize.w) < TexTileSize.z)) ? tileBlend - TexTileSize.z : tileBlend;
+
+		float tileXBlend = tileBlend * TexTileSize.x;
+		OUT.blendTC.x += frac(tileXBlend);
+		OUT.blendTC.y += floor(tileXBlend) * TexTileSize.y;
+		
+        #ifdef %_RT_SAMPLE0
+            float tileXGlowBlend = (tileBlend + GlowTexTileSize.w) * GlowTexTileSize.x;
+            float2 tileOffsetGlowBlend = float2(frac(tileXGlowBlend), floor(tileXGlowBlend) * GlowTexTileSize.y);
+            OUT.glowTC.zw = baseTC.xy * GlowTexTileSize.xy + tileOffsetGlowBlend;
+        #endif
+
+		//Confetti - Chris Hekman. We apply material tiling settings ontop of the regular tiling settings.
+		#if %_TT_TEXCOORD_GEN_OBJECT_LINEAR_DIFFUSE || %_TT_TEXCOORD_MATRIX
+		OUT.blendTC.w = 1;
+		_ModifyUV_1(OUT.blendTC, OUT.blendTC, OUT.HPosition );
+		OUT.blendTC.w = 0;
+		#endif
+		
+		OUT.blendTC.z = baseTC.w;
+#endif
+        float tileIndex = baseTC.z * 255.0;
+#ifdef %_RT_SAMPLE0
+        float tileXGlow = (tileIndex + GlowTexTileSize.w) * GlowTexTileSize.x;
+        float2 tileOffsetGlow = float2(frac(tileXGlow), floor(tileXGlow) * GlowTexTileSize.y);
+        OUT.glowTC.xy = baseTC.xy * GlowTexTileSize.xy + tileOffsetGlow;
+#endif
+
+		float tileX = baseTC.z * 255.0 * TexTileSize.x;
+		OUT.baseTC.x += frac(tileX);
+		OUT.baseTC.y += floor(tileX) * TexTileSize.y;
+	}
+	else
+	{
+		OUT.baseTC.xy = baseTC.xy;
+		OUT.baseTC.y *= ParticleParams3.x;
+	}
+
+	//Confetti - Chris Hekman. We apply material tiling settings ontop of the regular tiling settings.
+	#if %_TT_TEXCOORD_GEN_OBJECT_LINEAR_DIFFUSE || %_TT_TEXCOORD_MATRIX
+	OUT.baseTC.w = 1;
+	_ModifyUV_1(OUT.baseTC, OUT.baseTC, OUT.HPosition );
+	#endif
+
+	OUT.baseTC.zw = temp;
+}
+
+float GetShadowOccl(float3 worldPos, float3 worldNormal)
+{
+    half objectsShadow = 1.0f;
+    half cloudsShadow = 1.0f;
+
+    // object shadows
+    float4 vShadowWPos = float4(worldPos,1);
+    vert2fragShadowCommon shadowTC;
+
+    GenShadowTC(vShadowWPos, shadowTC);
+    objectsShadow = ShadowDepthTest(shadowTC, worldNormal*0.125).r;
+
+    // cloud shadows
+#if %_RT_LIGHT_TEX_PROJ
+    float2 uv = ComputeCloudShadowMapUV(worldPos);
+    cloudsShadow = saturate( tex2Dlod(cloudShadowMap, float4((uv * PerFrame_CloudShadowAnimParams.xy - PerFrame_CloudShadowAnimParams.zw) , 0, 0)).r * PerFrame_CloudShadowParams.w );
+    cloudsShadow = lerp ( cloudsShadow, 1 - cloudsShadow, PerFrame_CloudShadowParams.z ); // 0 = do not invert, 1 invert
+#endif
+
+    return min(objectsShadow, cloudsShadow);
+}
+
+
+//////////////////////////////////////////////////////////////////////////////////////////////////
+SParticleVertex ParticleCommonVertexOutput(in float4 vPos, in app2vertParticleGeneral IN, in half4 vSSCenterMotion)
+{
+	SParticleVertex OUT = (SParticleVertex)0;
+
+#if %_RT_DEBUG0
+	float3 vCenter = vPos.xyz;
+#endif
+
+#if %_RT_SOFT_PARTICLE
+	// soft particle thickness in .w
+	float fSoftScale = vPos.w;
+	vPos.w = 1;
+#endif
+
+	Particle_Setup_General( vPos, PerView_ViewProjMatr, IN, OUT);
+
+
+	float4 newTC = IN.baseTC;
+	//////////////////////////////////////////////////////
+	// Apply tiling params to tcs
+	Particle_Convert_TC(newTC, OUT);
+
+	OUT.Color = IN.Color;
+
+	// Compute alpha clipping params from input alpha
+	OUT.alphaClip.xyz = ParticleAlphaTest[0].xyz + ParticleAlphaTest[1].xyz * IN.Color.aaa;
+	OUT.alphaClip.z = clamp(OUT.alphaClip.z, 0.001, 1 - OUT.alphaClip.y);
+	OUT.alphaClip.x /= OUT.alphaClip.z;
+
+#if FEATURE_PARTICLES_TESSELLATION && !%_RT_NO_TESSELLATION
+	OUT.SHBasis0 = 0;
+	OUT.SHBasis1 = half4(OUT.Color.rgb, ParticleParams.w);		// Backlight ratio
+	OUT.SHBasis2 = Ambient;
+#else
+	half shadowOccl = 1.0f;
+
+	#if %_RT_PARTICLE_SHADOW
+		shadowOccl = GetShadowOccl(OUT.vWorldPos.xyz, OUT.vNormal.xyz);
+		OUT.blendTC.w = shadowOccl;
+	#endif
+
+    #ifdef %_RT_SAMPLE0
+        half4 ambientColorConstant = 0;
+    #else
+        half4 ambientColorConstant = Ambient;
+    #endif
+
+	ProjectLightVolumeToSH( float4(OUT.vWorldPos.xyz, shadowOccl), Ambient, float4(OUT.Color.rgb, ParticleParams.w), OUT.vNormal, OUT.SHBasis0, OUT.SHBasis1, OUT.SHBasis2 );
+#endif
+#if %_RT_SOFT_PARTICLE
+	// soft particle thickness in .w
+	OUT.alphaClip.w = fSoftScale;
+#endif
+
+#if %_RT_FOG && !%REFRACTION
+#if !%_RT_VOLUMETRIC_FOG
+	OUT.localFogColor = GetVolumetricFogColor( vPos );
+#else
+	OUT.localFogColor = GetVolumetricFogAnalyticalColorByWorldPos( vPos );
+#endif
+#endif
+
+#if %_RT_DEBUG0
+	ParticlesDebug( OUT, vPos.xyz, vCenter );
+#endif
+
+	return OUT;
+}
+
+//////////////////////////////////////////////////////////////////////
+// Unify inputs from SParticleVertex into vertex ouput structure
+
+OutputVS UnifyParticleOutputVS(in SParticleVertex pCommon)
+{
+	OutputVS OUT = (OutputVS) 0;
+
+	OUT.HPosition = pCommon.HPosition;
+
+    #ifdef %_RT_SAMPLE0
+        OUT.glowTC = pCommon.glowTC;
+    #endif
+
+	OUT.baseTC = pCommon.baseTC;
+
+#if %_RT_ANIM_BLEND || %_RT_PARTICLE_SHADOW
+	OUT.blendTC = pCommon.blendTC;
+#endif
+
+	OUT.alphaClip = pCommon.alphaClip;
+
+#if (FEATURE_PARTICLES_TESSELLATION && !%_RT_NO_TESSELLATION) || %BUMP_MAP || %_RT_GLOBAL_ILLUMINATION || USE_MATERIAL
+	OUT.vWorldPos = pCommon.vWorldPos;
+#endif
+#if USE_MATERIAL
+	OUT.vTangent = pCommon.vTangent;
+#endif
+
+#if %_RT_FOG && !%REFRACTION
+	OUT.localFogColor = pCommon.localFogColor;
+#endif
+
+#if %_RT_MOTION_BLUR && !%REFRACTION
+	OUT.vMotionBlur = pCommon.vMotionBlur;
+	OUT.vMotionBlur2 = pCommon.vMotionBlur2;
+#endif
+
+
+	OUT.vNormal = pCommon.vNormal;
+
+	// 4 band spherical harmonics basis
+	OUT.SHBasis0 = pCommon.SHBasis0;
+	OUT.SHBasis1 = pCommon.SHBasis1;
+	OUT.SHBasis2 = pCommon.SHBasis2;
+
+	return OUT;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+half4 CenterMotion()
+{
+#if %_RT_MOTION_BLUR
+	const half4 vCenterPos = mul(PerView_ViewProjMatr, IN.Position);
+	const half4 vCenterPosPrev = mul(PerView_ViewProjMatrPrev, IN.Position);
+	// Current screen space position of particle center (xy), screen space camera motion vector (zw)
+	half4 vSSCenterMotion = half4(vCenterPos.xy/vCenterPos.w, vCenterPosPrev.xy/vCenterPosPrev.w);
+	vSSCenterMotion.zw = vSSCenterMotion.xy - vSSCenterMotion.zw;
+	return vSSCenterMotion;
+#else
+	return 0;
+#endif
+}
+
+void ParticleSpriteCommon(inout float4 Position, inout app2vertParticleGeneral IN)
+{
+	IN.baseTC = GetInputColor(IN.baseTC);
+	IN.Color = GetInputColor(IN.Color);
+
+#if %_RT_SOFT_PARTICLE
+	// soft particle thickness in Position.w
+	Position.w = 2.h / length(IN.XAxis + IN.YAxis);
+	Position.w *= ParticleParams2.x;
+#endif
+}
+
+OutputVS ParticleVS(in float4 Position: POSITION, app2vertParticleGeneral IN
+		, uint vertID: SV_VertexID
+)
+{
+	ParticleSpriteCommon(Position, IN);
+
+#if %_RT_SPRITE
+	// Vertex data is instanced
+	[branch] if (IN.baseTC.x)
+	{
+		// Octagonal shape
+		static const half2 avOctVerts[] =
+		{
+			half2(0.294h, 0.h),    //0
+			half2(0.706h, 0.h),    //1
+			half2(0.h,    0.294h), //7
+			half2(1.h,    0.294h), //2
+			half2(0.h,    0.706h), //6
+			half2(1.h,    0.706h), //3
+			half2(0.294h, 1.h),    //5
+			half2(0.706h, 1.h),    //4
+		};
+		IN.baseTC.xy = avOctVerts[vertID];
+	}
+	else
+	{
+		// Quad shape
+		IN.baseTC.x = vertID & 1;
+		IN.baseTC.y = vertID & 2 ? 1 : 0;
+	}
+#endif
+	SParticleVertex MID = ParticleCommonVertexOutput(Position, IN, CenterMotion());
+	return UnifyParticleOutputVS(MID);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+// DX11 specifics
+
+struct ParticleHSInput
+{
+	float4 Position: TEXCOORD6;
+	app2vertParticleGeneral VSIn;
+};
+
+void ParticleTessVS(out ParticleHSInput OUT, float4 Position: POSITION, app2vertParticleGeneral IN)
+{
+	OUT.Position = Position;
+	OUT.VSIn = IN;
+	ParticleSpriteCommon(OUT.Position, OUT.VSIn);
+}
+
+struct ControlPointHS
+{
+	float4 HPosition : TEXCOORDN;
+
+	float4 baseTC    : TEXCOORDN;
+#if %_RT_ANIM_BLEND || %_RT_PARTICLE_SHADOW
+	float4 blendTC   : TEXCOORDN;
+#endif
+	half4 alphaClip : TEXCOORDN;
+
+	half4 vWorldPos : TEXCOORDN;
+#if !%_RT_SPRITE
+	half3 vYAxis : TEXCOORDN;
+#endif
+
+#if USE_MATERIAL
+	half4 vTangent  : TEXCOORDN;
+#endif
+
+#if !%REFRACTION
+	#if %_RT_FOG
+	half4 localFogColor : TEXCOORDN;
+	#endif
+	#if %_RT_MOTION_BLUR
+	half4 vMotionBlur : TEXCOORDN;
+	half3 vMotionBlur2 : TEXCOORDN;
+	#endif
+#endif
+
+	half4 vNormal   : TEXCOORDN;
+	half4 SHBasis0 : TEXCOORDN;
+	half4 SHBasis1 : TEXCOORDN;
+	half4 SHBasis2 : TEXCOORDN;
+};
+
+//////////////////////////////////////////////////////////////////////////////////////////////////
+struct TessFactorsHS
+{
+	float Edges[4]  : SV_TessFactor;
+	float Inside[2] : SV_InsideTessFactor;
+};
+
+//////////////////////////////////////////////////////////////////////////////////////////////////
+TessFactorsHS ParticleConstFuncHS(OutputPatch<ControlPointHS, 4> p)
+{
+	TessFactorsHS OUT = (TessFactorsHS)0;
+	bool bFrustumCulled = ViewFrustumCull(p[0].vWorldPos.xyz, p[1].vWorldPos.xyz, p[2].vWorldPos.xyz, p[3].vWorldPos.xyz, PerView_FrustumPlaneEquation, 5.0);
+	if (bFrustumCulled)
+		return OUT;
+
+	float fTrianglePixSize = PerView_TessellationParams.w;
+
+	float2 Scr[4];
+
+	[unroll] for (int i = 0; i < 4; i++)
+	{
+		float4 ScrPos = HPosToScreenTC( p[i].HPosition );
+		Scr[i] = ScrPos.xy / (ScrPos.w * fTrianglePixSize) * PerView_ScreenSize.xy;
+	}
+	float4 EdgeTess = float4
+	(
+		length(Scr[0] - Scr[2]),
+		length(Scr[0] - Scr[1]),
+		length(Scr[1] - Scr[3]),
+		length(Scr[2] - Scr[3])
+	);
+
+#if %_RT_PARTICLE_SHADOW || !%_RT_SPRITE
+	// higher tessellation if particle receives shadows, or if tessellating curved connected particles
+	const float fMaxTessFactor = 64;
+#else
+	const float fMaxTessFactor = 8;
+#endif
+	EdgeTess = min(EdgeTess, fMaxTessFactor);
+
+	// Assign tessellation levels.
+	OUT.Edges[0] = EdgeTess.x;
+	OUT.Edges[1] = EdgeTess.y;
+	OUT.Edges[2] = EdgeTess.z;
+	OUT.Edges[3] = EdgeTess.w;
+
+	OUT.Inside[1] = (EdgeTess.x + EdgeTess.z) * 0.5;
+	OUT.Inside[0] = (EdgeTess.y + EdgeTess.w) * 0.5;
+
+	return OUT;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+[domain("quad")]
+[partitioning("fractional_even")]
+[outputtopology("triangle_cw")]
+[outputcontrolpoints(4)]
+[patchconstantfunc("ParticleConstFuncHS")]
+[maxtessfactor(64)]
+ControlPointHS ParticleHS(
+#if %_RT_SPRITE
+	InputPatch<ParticleHSInput, 1> inputPatch,
+#else
+	InputPatch<ParticleHSInput, 4> inputPatch,
+#endif
+	uint uCPID : SV_OutputControlPointID)
+{
+	// Modify tex coords for 4 patch corners
+#if %_RT_SPRITE
+	ParticleHSInput IN = inputPatch[0];
+	IN.VSIn.baseTC.x = uCPID & 1;
+	IN.VSIn.baseTC.y = uCPID & 2 ? 1 : 0;
+#else
+	ParticleHSInput IN = inputPatch[uCPID];
+#endif
+
+	SParticleVertex MID = ParticleCommonVertexOutput(IN.Position, IN.VSIn, 0);
+	// return UnifyParticleOutputVS(MID);
+
+	ControlPointHS OUT = (ControlPointHS)0;
+
+	OUT.HPosition = MID.HPosition;
+
+	OUT.baseTC = MID.baseTC;
+#if %_RT_ANIM_BLEND
+	OUT.blendTC = MID.blendTC;
+#endif
+	OUT.alphaClip = MID.alphaClip;
+
+	OUT.vWorldPos = MID.vWorldPos;
+
+#if !%_RT_SPRITE
+	OUT.vYAxis = half3(IN.VSIn.YAxis);
+#endif
+
+#if USE_MATERIAL
+	OUT.vTangent = MID.vTangent;
+#endif
+
+#if %_RT_FOG && !%REFRACTION
+	OUT.localFogColor = MID.localFogColor;
+#endif
+
+#if %_RT_MOTION_BLUR && !%REFRACTION
+	OUT.vMotionBlur = MID.vMotionBlur;
+	OUT.vMotionBlur2 = MID.vMotionBlur2;
+#endif
+
+	OUT.vNormal = MID.vNormal;
+
+	OUT.SHBasis0 = MID.SHBasis0;
+	OUT.SHBasis1 = MID.SHBasis1;
+	OUT.SHBasis2 = MID.SHBasis2;
+
+	return OUT;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+[domain("quad")]
+OutputVS ParticleDS(float2 QuadUV : SV_DomainLocation, const OutputPatch<ControlPointHS, 4> ControlPt, TessFactorsHS TessFactorsInput)
+{
+	OutputVS OUT = (OutputVS)0;
+
+	float4 vWorldPos = BilinearInterp(QuadUV, ControlPt[0].vWorldPos, ControlPt[1].vWorldPos, ControlPt[2].vWorldPos, ControlPt[3].vWorldPos);
+
+#if !%_RT_SPRITE
+	// Add curve coeffs
+	float uut = (1-QuadUV.y) * (1-QuadUV.y) * QuadUV.y;
+	float utt = QuadUV.y * QuadUV.y * (1-QuadUV.y);
+
+	float3 vY0 = lerp(ControlPt[0].vYAxis, ControlPt[1].vYAxis, QuadUV.x);
+	float3 vY1 = lerp(ControlPt[2].vYAxis, ControlPt[3].vYAxis, QuadUV.x);
+	float3 vDP = lerp(ControlPt[2].vWorldPos - ControlPt[0].vWorldPos,
+										ControlPt[3].vWorldPos - ControlPt[1].vWorldPos, QuadUV.x);
+	vWorldPos.xyz += vDP * (utt - uut) + vY0 * uut - vY1 * utt;
+#endif
+
+	OUT.HPosition = mul(PerView_ViewProjMatr, float4(vWorldPos.xyz, 1));
+
+	OUT.baseTC = BilinearInterp(QuadUV, ControlPt[0].baseTC, ControlPt[1].baseTC, ControlPt[2].baseTC, ControlPt[3].baseTC);
+#if %_RT_ANIM_BLEND || %_RT_PARTICLE_SHADOW
+	OUT.blendTC = BilinearInterp(QuadUV, ControlPt[0].blendTC.xyzw, ControlPt[1].blendTC.xyzw, ControlPt[2].blendTC.xyzw, ControlPt[3].blendTC.xyzw);
+#endif
+	OUT.alphaClip = BilinearInterp(QuadUV, ControlPt[0].alphaClip, ControlPt[1].alphaClip, ControlPt[2].alphaClip, ControlPt[3].alphaClip);
+
+
+#if %ENVIRONMENT_MAP || %_RT_GLOBAL_ILLUMINATION || USE_MATERIAL
+	OUT.vWorldPos = vWorldPos;
+#endif
+#if USE_MATERIAL
+	OUT.vTangent = BilinearInterp(QuadUV, ControlPt[0].vTangent, ControlPt[1].vTangent, ControlPt[2].vTangent, ControlPt[3].vTangent);
+#endif
+
+#if %_RT_FOG && !%REFRACTION
+	OUT.localFogColor = BilinearInterp(QuadUV, ControlPt[0].localFogColor, ControlPt[1].localFogColor, ControlPt[2].localFogColor, ControlPt[3].localFogColor);
+#endif
+
+#if %_RT_MOTION_BLUR && !%REFRACTION
+	OUT.vMotionBlur = BilinearInterp(QuadUV, ControlPt[0].vMotionBlur, ControlPt[1].vMotionBlur, ControlPt[2].vMotionBlur, ControlPt[3].vMotionBlur);
+	OUT.vMotionBlur2 = BilinearInterp(QuadUV, ControlPt[0].vMotionBlur2.xyzz, ControlPt[1].vMotionBlur2.xyzz, ControlPt[2].vMotionBlur2.xyzz, ControlPt[3].vMotionBlur2.xyzz);
+#endif
+
+	float3 vNormal = 0;
+	OUT.vNormal = BilinearInterp(QuadUV, ControlPt[0].vNormal, ControlPt[1].vNormal, ControlPt[2].vNormal, ControlPt[3].vNormal);
+	vNormal = OUT.vNormal;
+
+	half shadowOccl = 1;// Sun shadows
+	#if %_RT_PARTICLE_SHADOW
+		shadowOccl = GetShadowOccl(vWorldPos.xyz, vNormal.xyz);
+		OUT.blendTC.w = shadowOccl;
+	#endif
+
+	const float4 cAmbient = ControlPt[0].SHBasis2;
+	const float4 cDiffuseMat = ControlPt[0].SHBasis1;
+
+	ProjectLightVolumeToSH( float4(vWorldPos.xyz, shadowOccl), cAmbient, cDiffuseMat, vNormal, OUT.SHBasis0, OUT.SHBasis1, OUT.SHBasis2 );
+
+	return OUT;
+}
+
+//////////////////////////////////////////////////////////////////////
+
+void ApplyTexCoordsDeformation( inout OutputVS IN, float4 WPos )
+{
+#if USE_MATERIAL
+
+	half4 baseColor = GetTexture2D(diffuseSampler, IN.baseTC.xy);
+
+	#if %SCREEN_SPACE_DEFORMATION
+
+		half3 vBump = half3(0,0,1);
+		// apply rescale
+		PerturbationScale *= WPos.w* 0.05;
+
+		float2 tcProj = WPos.xy;
+		float2 tcAnim = float2(0.5, PerView_AnimGenParams.z * AnimSpeed + 0.5);
+		PerturbationScale *= (tcProj-0.5);
+
+		vBump.xy  = GetXYNormalMap(customSampler, PerturbationScale + tcAnim);
+		vBump.xy += GetXYNormalMap(customSampler, PerturbationScale * 1.5 + tcAnim);
+
+		IN.baseTC.xy += vBump.xy * PerturbationStrength * baseColor.w;
+
+	#elif %DEFORMATION
+
+		float2 tcDeform = IN.baseTC.zw;
+		float4 tcAnim = PerView_AnimGenParams.z * DeformAnimSpeed * float4(0.9, 0.9, 2, 2) + float4(0.5, 0.5, 0.75, 1.0);
+		float4 tcBump = (tcDeform.xyxy - 0.5)* DeformTile * float4(1,1,2,2) + tcAnim.xyzw;
+
+		half2 vBump = GetXYNormalMap(customSampler, tcBump.xy);
+		vBump.xy   += GetXYNormalMap(customSampler, tcBump.zw);
+
+		IN.baseTC.xy += vBump.xy * DeformAmount;
+
+	#endif
+
+#endif
+}
+
+//////////////////////////////////////////////////////////////////////
+void ApplyColorLookup( in OutputVS IN, inout half4 cBaseColor )
+{
+#if USE_MATERIAL
+	// are artist using this at all ? if not remove
+
+	#if %COLOR_LOOKUP
+	half fLum = dot(cBaseColor.xyz, 0.333 );
+	cBaseColor.xyz = saturate ( cBaseColor.w *ColLookupAmplitude * tex2D( customSecSampler,  ColLookupColPhase * fLum  ) );
+		#endif
+#endif
+}
+
+//////////////////////////////////////////////////////////////////////
+half4 GetDiffuseMap(OutputVS IN)
+{
+#if %_RT_MOTION_BLUR && !%REFRACTION
+	half4 vUVGrad = max( half4(ddx(IN.baseTC.xy), ddy(IN.baseTC.xy)), IN.vMotionBlur2.xyxy);
+	half4 cDiffuseMap = GetTexture2DGrad(diffuseSamplerAniso, IN.baseTC.xy, vUVGrad.xy, vUVGrad.zw);
+#else
+	half4 cDiffuseMap = GetTexture2D(diffuseSampler, IN.baseTC.xy);
+#endif
+
+#if %_RT_ANIM_BLEND
+	// Blend in second tile
+	half4 cDiffuseMapSec = GetTexture2D(diffuseSampler, IN.blendTC.xy);
+	cDiffuseMap += (cDiffuseMapSec - cDiffuseMap) * IN.blendTC.z;
+#endif
+
+	ApplyColorLookup( IN, cDiffuseMap );
+
+	//cDiffuseMap *= IN.Color; // baked in lighting
+
+	return cDiffuseMap;
+}
+
+//////////////////////////////////////////////////////////////////////
+half4 GetGlowMap(OutputVS IN)
+{
+#ifdef %_RT_SAMPLE0
+    float4 samplingTC = IN.glowTC;
+#else
+    #if %_RT_ANIM_BLEND
+        float2 blendTC = IN.blendTC.xy;
+    #else
+        float2 blendTC = 0;
+    #endif
+    float4 samplingTC = float4(IN.baseTC.xy, blendTC);
+#endif
+
+	half4 cGlowMap = 1.0;
+#if %GLOW_MAP
+	cGlowMap = GetTexture2D(glowMapSampler, samplingTC.xy);
+#if %_RT_ANIM_BLEND
+	half4 cGlowMapSec = GetTexture2D(glowMapSampler, samplingTC.zw);
+	cGlowMap += (cGlowMapSec - cGlowMap) * IN.blendTC.z;
+#endif
+#endif
+	return cGlowMap;
+}
+
+//////////////////////////////////////////////////////////////////////
+half3 GetNormalMap(OutputVS IN)
+{
+#if USE_MATERIAL
+	half3 cNormalMap = GetNormalMap(normalMapSampler, IN.baseTC.xy);
+	#if %_RT_ANIM_BLEND
+	half3 cNormalMapSec = GetNormalMap(normalMapSampler, IN.blendTC.xy);
+	cNormalMap += (cNormalMapSec - cNormalMap) * IN.blendTC.z;
+	#endif
+	return cNormalMap;
+#endif
+	return half3(0, 0, 1);
+}
+
+
+//////////////////////////////////////////////////////////////////////
+half4 GetRefractionMap( OutputVS IN, float4 tcScreen, half3 cNormalMap)
+{
+  	// Igor: refraction must be disabled for Metal. It is too expensive for mobile platforms at the moment
+  	// since involces redundant resolve/restore or provides poor quality.
+  	// Compiler will effectively optimize refraction code out.
+#if USE_MATERIAL && !METAL
+	#if %REFRACTION
+	half2 tcRefraction = tcScreen + cNormalMap.xy * RefrBumpScale.x * IN.alphaClip.x;
+	return DecodeHDRBuffer( tex2D(envMapSamplerRefr, tcRefraction ) );
+	#endif
+#endif
+	return 0;
+}
+
+//////////////////////////////////////////////////////////////////////
+half3 SaturateGI(const in half3 cColor, const in half fSat)
+{
+	const half3 cColorWgt = half3(0.3086, 0.6094, 0.0820) * (1.h - fSat);
+	half4x4 matTrans = {	half4(half3(fSat, 0, 0) + cColorWgt.x, 0.h),
+						half4(half3(0, fSat, 0) + cColorWgt.y, 0.h),
+						half4(half3(0, 0, fSat) + cColorWgt.z, 0.h),
+						half4(0.h, 0.h, 0.h, 1.h) };
+	return mul(half4(cColor, 1.h), matTrans).xyz;
+}
+
+//////////////////////////////////////////////////////////////////////
+half ApplySoftIntersection( inout half4 cFinal, float4 WPos, half fThicknessK )
+{
+	const half fDepth = GetLinearDepthScaled( sceneDepthSampler, WPos.xy ).x; // todo: pre-computed linear depth could save a bunch
+
+	const half fDist = max(min(fDepth-WPos.w, WPos.w), 0.0);
+	const half fSoftParticle = 1.0 - exp(-fDist*fDist*fThicknessK);
+	cFinal.a *= fSoftParticle;
+
+#if !%_RT_ALPHABLEND
+	cFinal.rgb *= fSoftParticle;
+#endif
+
+	return fSoftParticle;
+}
+
+//////////////////////////////////////////////////////////////////////
+void ApplyFog( inout half4 cFinal, half4 avgFogVolumeContrib, half4 localFogColor)
+{
+#if %_RT_FOG && !%REFRACTION
+	#if %_RT_ALPHABLEND
+		cFinal.xyz = lerp( localFogColor.xyz, cFinal.xyz, localFogColor.w );
+		cFinal.xyz = lerp( avgFogVolumeContrib.xyz, cFinal.xyz, avgFogVolumeContrib.w );
+	#else
+		cFinal.xyz *= localFogColor.w;
+		cFinal.xyz *= avgFogVolumeContrib.w;
+	#endif
+#endif
+}
+
+//////////////////////////////////////////////////////////////////////
+ void ApplyMotionBlur( inout half4 cFinal, half4 vMotionBlur, half3 vMotionBlur2 )
+ {
+	// NOTE: vMotionBlur.xy might be normalized and length passed separately from VS/GS,
+	// then fast expand of particle (eg.explosion) would have the same motion strength over the whole particle
+	const half fMotionLength = length(vMotionBlur.xy);
+	if (fMotionLength > 1e-4h)
+	{
+		const half fMotionStrength = saturate(fMotionLength * 10);
+
+		// (0,1) for central part towards stretched parts
+##if AZ_RESTRICTED_PLATFORM
+    ##include_restricted(Particles_cfi, AZ_RESTRICTED_PLATFORM)
+##endif
+##if AZ_RESTRICTED_SECTION_IMPLEMENTED
+    ##undef AZ_RESTRICTED_SECTION_IMPLEMENTED
+##else
+		const half fStretchRatio = saturate(abs(dot(vMotionBlur.zw, vMotionBlur.xy / fMotionLength)) * 1.3h);
+##endif
+
+		half fMBOpacityCoef = fMotionStrength * fStretchRatio;
+		// (0,1) for center towards edges
+		//half fEdgeScale = saturate(dot(IN.vMotionBlur.zw, IN.vMotionBlur.zw));// + 0.2h * fMotionStrength);
+		//fEdgeScale *= fEdgeScale;
+		fMBOpacityCoef *= fMBOpacityCoef;
+		//fMBOpacityCoef *= fMBOpacityCoef;
+		fMBOpacityCoef = saturate(1.h - fMBOpacityCoef);
+		//fMBOpacityCoef *= 1.h - fEdgeScale * fMotionStrength * saturate(2.h * (1.h - fStretchRatio));
+
+		// Energy conservation for high glow/HDR particles based on rough screen space area expand
+		fMBOpacityCoef *= vMotionBlur2.z;
+
+		cFinal.a *= fMBOpacityCoef;
+
+		#if !%_RT_ALPHABLEND
+			cFinal.rgb *= fMBOpacityCoef;
+		#endif
+	}
+ }
+
+//////////////////////////////////////////////////////////////////////
+struct pixoutParticle
+{
+	half4 Color : COLOR0;
+
+#if %DEPTH_FIXUP && %_RT_DEPTHFIXUP
+	half4 BlendFactors : COLOR1;
+#endif
+};
+
+EARLYDEPTHSTENCIL
+pixoutParticle ParticlePS(OutputVS IN)
+{
+	pixoutParticle OUT = (pixoutParticle) 0;
+
+#if %_RT_DEBUG0 || %_RT_DEBUG1 || %_RT_DEBUG2 || %_RT_DEBUG3
+	// Custom debug mode for particles
+	#if %_RT_DEBUG0 && !%_RT_DEBUG1 && !%_RT_DEBUG2 && !%_RT_DEBUG3
+		OUT.Color = float4(tex2D(gradientMapSampler, IN.baseTC.x).xyz, 0.5);
+		OUT.Color.xyz *= OUT.Color.xyz * 0.1h; // output linear space and 10% brightness - compensate for hdr blooming kicking in
+	#else
+		DebugOutput(OUT.Color, float4(IN.baseTC.xy, 0, 1));
+	#endif
+	return OUT;
+#endif
+
+	float4 tcScreen = GetScreenCoords( IN.HPosition );
+
+	ApplyTexCoordsDeformation( IN, tcScreen );
+
+	half4 cDiffuseMap = GetDiffuseMap(IN);
+	half4 cGlowMap = GetGlowMap(IN);
+
+	// Early-out alpha clipping and scaling
+	cDiffuseMap.a -= IN.alphaClip.y;
+	if (cDiffuseMap.a <= 0.01)
+		discard;
+
+	cDiffuseMap.a = min(cDiffuseMap.a, IN.alphaClip.z) * IN.alphaClip.x;
+	cDiffuseMap.a = saturate(cDiffuseMap.a);
+
+	#if USE_MATERIAL
+		cDiffuseMap.rgb *= PerMaterial_DiffuseColor; // for backward compatibility - art should just use particle color as diffuse
+	#endif
+
+	half3 cNormalMap = GetNormalMap(IN);
+
+	half4 cDiffuseAcc = 0;
+
+	float3 vNormal;
+
+	#if USE_MATERIAL
+	const half3x3 mTangentToWS = half3x3(IN.vTangent.xyz, float3(IN.vNormal.w, IN.vTangent.w, IN.vWorldPos.w), IN.vNormal.xyz);
+	vNormal = mul(cNormalMap, mTangentToWS);
+	#else
+	vNormal = IN.vNormal.xyz;
+	#endif
+
+	vNormal = normalize(vNormal);
+
+	cDiffuseAcc.rgb = GetEnvLighting( IN.SHBasis0, IN.SHBasis1, IN.SHBasis2, vNormal );
+
+
+#if %_RT_ENVIRONMENT_CUBEMAP
+	cDiffuseAcc.rgb += GetEnvironmentCMap(environmentCMSampler, vNormal.xyz, 0.0f).rgb * Ambient.w * ParticleParams3.y;  // todo: this should use environment probe settings as well (diffuse+hdr mul)
+#endif
+
+	half4 cFinal = float4(cDiffuseAcc.rgb, cDiffuseMap.a);
+
+	// Apply material color
+	cFinal.xyz *= cDiffuseMap.xyz;
+
+#if USE_MATERIAL
+	#if %REFRACTION
+		cFinal.rgb = GetRefractionMap( IN, tcScreen, cNormalMap );
+		#if %REFRACTION_TINTING
+			cFinal.rgb *= cDiffuseMap.rgb;
+		#endif
+	#endif
+
+
+	#if %SPECULAR_LIGHTING
+		{
+			half3 cSpecularAcc = 0;
+			half3 vView = normalize(PerView_WorldViewPos.xyz-IN.vWorldPos.xyz);
+			half fGloss = PerMaterial_SpecularColor.w;
+
+			#if %_RT_ENVIRONMENT_CUBEMAP
+				half fNdotE = saturate( dot(vView.xyz, vNormal.xyz));                                        // 1 alu
+				half3 vReflVec = (2.0h * fNdotE * vNormal.xyz) - vView.xyz;
+				cSpecularAcc.rgb = GetEnvironmentCMap(environmentCMSampler, vReflVec.xyz, fGloss)*ParticleParams3.y;
+			#endif
+
+			// sun spec
+			float3 sunIntensity = PerFrame_SunColor.rgb;
+
+			#if %_RT_PARTICLE_SHADOW
+				sunIntensity *= IN.blendTC.w;
+			#endif
+
+			cSpecularAcc.rgb += BlinnBRDF(vNormal, vView, PerFrame_SunDirection, fGloss) * saturate(dot(vNormal, PerFrame_SunDirection)) * sunIntensity;
+			cSpecularAcc *= PerMaterial_SpecularColor.rgb;
+
+			// combine with diffuse, but make sure we stay energy conservant
+			cFinal.rgb *= saturate( 1 - GetLuminance( PerMaterial_SpecularColor ) );
+			cFinal.rgb += cSpecularAcc;
+		}
+	#endif
+#endif
+
+	// Add particle glow
+    #ifdef %_RT_SAMPLE0
+        cFinal.rgb += cDiffuseMap.a * cGlowMap.rgb * Ambient.r;
+    #else
+        cFinal.rgb += cDiffuseMap.a * cDiffuseMap.rgb * cGlowMap.rgb * ParticleEmissiveColor.rgb;
+    #endif
+
+	// Premultiplied alpha for additive particles
+#if !%_RT_ALPHABLEND && !%_RT_MULTI_LAYER_ALPHA_BLEND
+	cFinal.xyz *= cFinal.w;
+#endif
+
+#if %_RT_SOFT_PARTICLE
+	ApplySoftIntersection(cFinal, tcScreen, IN.alphaClip.w);
+#endif
+
+#if %_RT_FOG && !%REFRACTION
+	#if !%_RT_VOLUMETRIC_FOG
+		ApplyFog(cFinal, AvgFogVolumeContrib, IN.localFogColor);
+	#else
+		VolumetricFogTexcoord vtc = GetVolumetricFogTexcoordParamByScreenPos(IN.HPosition);
+		float4 vf = GetVolumetricFogValue(vtc);
+		#if %_RT_ALPHABLEND
+			// apply volumetric fog for alpha blend mode.
+			ApplyVolumetricFog(vf, IN.localFogColor, vtc, cFinal.rgb);
+		#else
+			// apply transmittance for additive blend mode.
+			ApplyVolumetricFogTransmittance(vf, IN.localFogColor, vtc, cFinal.rgb);
+		#endif
+	#endif
+#endif
+
+#if !%REFRACTION
+	#if %_RT_MOTION_BLUR
+	ApplyMotionBlur(cFinal, IN.vMotionBlur, IN.vMotionBlur2);
+	#endif
+#endif
+
+
+#if %_RT_MULTI_LAYER_ALPHA_BLEND
+
+    float depth = IN.HPosition.w;
+
+    float transmittance = 1.0f - cFinal.a;
+    cFinal.xyz *= cFinal.a;
+
+    #if %_RT_ADDITIVE_BLENDING || !%_RT_ALPHABLEND
+        transmittance = 1.0f;
+    #endif
+
+    uint flags = 0;
+    #if %DEPTH_FIXUP && %_RT_DEPTHFIXUP
+        flags |= cFinal.a > DepthFixupThreshold ? MLAB_DO_DEPTH_FIXUP : 0;
+    #endif
+
+    MLABInsertLayer(MultiLayerAlphaBlendBuffer, cFinal.xyz, transmittance.xxx, depth, flags, PerFrame_MultiLayerAlphaBlendData.x, int2(IN.HPosition.xy), int(PS_ScreenSize.x));
+    discard;
+
+#endif
+
+	OUT.Color = cFinal;
+
+// define copied from Common.cfi
+#define DEPTH_FIXUP_KEY 100.0f
+#if %DEPTH_FIXUP && %_RT_DEPTHFIXUP
+	const float fZ = tcScreen.w * PerView_NearFarClipDist.w;
+	OUT.Color.a = cFinal.a > DepthFixupThreshold ? fZ : DEPTH_FIXUP_KEY;
+	OUT.BlendFactors = cFinal.a;
+#endif
+	return OUT;
+}
+
+
+//////////////////////////////////////////////////////////////////////
+// Fog density injection
+//////////////////////////////////////////////////////////////////////
+struct OutputParticleVolumeFogVS
+{
+	float4 HPosition	: POSITION;
+
+	float4 baseTC			: TEXCOORDN; // xy: texcoords, zw: SParticleVertex::blendTC.xy
+
+	float4 alphaClip	: TEXCOORDN; // xyz: aplpha clip params, w: linear depth
+
+	float4 color			: TEXCORRDN; // xyz: vertex color, w: thickness
+
+#if %_RT_ANIM_BLEND
+	float blendTC		: TEXCOORDN; // SParticleVertex::blendTC.z
+#endif
+};
+
+struct OutputParticleVolumeFogGS
+{
+	float4 HPosition	: POSITION;
+
+	float4 baseTC			: TEXCOORDN; // xy: texcoords, zw: SParticleVertex::blendTC.xy
+
+	float4 alphaClip	: TEXCOORDN; //xyz: aplpha clip params, w: depth of voxel
+
+	float4 color			: TEXCORRDN; // xyz: vertex color, w: SParticleVertex::blendTC.z
+
+	float4 volume			: TEXCOORDN;
+
+	uint rtindex			: SV_RenderTargetArrayIndex;
+};
+
+struct pixoutParticleVolumeFogPS
+{
+	half4 Color : COLOR0;
+	half4 Color1 : COLOR1;
+};
+
+OutputParticleVolumeFogVS ParticleVolumeFogVS(in float4 Position: POSITION, app2vertParticleGeneral IN, uint vertID: SV_VertexID)
+{
+	ParticleSpriteCommon(Position, IN);
+
+#if %_RT_SPRITE
+	// Vertex data is instanced
+	[branch] if (IN.baseTC.x)
+	{
+		// Octagonal shape
+		static const half2 avOctVerts[] =
+		{
+			half2(0.294h, 0.h),    //0
+			half2(0.706h, 0.h),    //1
+			half2(0.h,    0.294h), //7
+			half2(1.h,    0.294h), //2
+			half2(0.h,    0.706h), //6
+			half2(1.h,    0.706h), //3
+			half2(0.294h, 1.h),    //5
+			half2(0.706h, 1.h),    //4
+		};
+		IN.baseTC.xy = avOctVerts[vertID];
+	}
+	else
+	{
+		// Quad shape
+		IN.baseTC.x = vertID & 1;
+		IN.baseTC.y = vertID & 2 ? 1 : 0;
+	}
+#endif
+	SParticleVertex MID = ParticleCommonVertexOutput(Position, IN, CenterMotion());
+
+	Position.w = 1.0f;
+	float4 hPosition = mul(PerView_ViewProjMatr, Position);
+
+	// scale aplha to fog density.
+	MID.alphaClip.x *= 0.25f;
+
+	// calculate thickness
+	float thickness = length(IN.XAxis + IN.YAxis);
+	thickness *= ParticleParams2.z;
+
+	OutputParticleVolumeFogVS OUT;
+	OUT.HPosition = MID.HPosition;
+	OUT.baseTC = MID.baseTC;
+#if %_RT_ANIM_BLEND
+	OUT.baseTC.zw = MID.blendTC.xy;
+	OUT.blendTC.x = MID.blendTC.z;
+#endif
+	OUT.alphaClip.xyz = MID.alphaClip.xyz;
+	OUT.alphaClip.w = hPosition.w;// this is due to using same depth on every triangles in a particle.
+	OUT.color.xyz = MID.Color.xyz;
+	OUT.color.w = thickness;
+
+	return OUT;
+}
+
+// max 16 slices per one particle sprite
+[maxvertexcount(48)]
+void ParticleVolumeFogGS( triangle OutputParticleVolumeFogVS IN[3], inout TriangleStream<OutputParticleVolumeFogGS> outputStream )
+{
+	const float maxRange = PerFrame_VolumetricFogDistributionParams.x + PerFrame_VolumetricFogDistributionParams.y;
+	const float rcpMaxSlices = PerFrame_VolumetricFogSamplingParams.w;
+	const float maxThickness = 7.0f * rcpMaxSlices * maxRange;//max length of half thickness is less than 7 slices.
+	const float thickness = min(maxThickness, IN[0].color.w);
+
+	const float linearDepth = IN[0].alphaClip.w;
+	const float linearDepthFront = linearDepth - thickness;
+	const float linearDepthBack = linearDepth + thickness;
+
+	const float depthIndexFront = PerFrame_VolumetricFogSamplingParams.z * GetVolumetricFogDepthTexcoord(linearDepthFront);
+	const float depthIndexBack = PerFrame_VolumetricFogSamplingParams.z * GetVolumetricFogDepthTexcoord(linearDepthBack);
+	const uint sliceStartIndex = max(0.0f, floor(depthIndexFront));
+	const uint sliceEndIndex = min(PerFrame_VolumetricFogSamplingParams.z - 2, ceil(depthIndexBack));
+
+	for(uint i = sliceStartIndex; i <= sliceEndIndex; ++i)
+	{
+		OutputParticleVolumeFogGS OUT;
+		OUT.rtindex = i;
+
+		float depthFront0 = GetVolumetricFogLinearDepth(i - 1.0f);
+		float depthFront1 = GetVolumetricFogLinearDepth(i);
+		float depthBack1 = GetVolumetricFogLinearDepth(i + 1.0f);
+		OUT.volume = float4(linearDepthFront, linearDepthBack, depthFront0, depthFront1);
+
+		[unroll] for(uint j = 0; j < 3; ++j)
+		{
+			OUT.HPosition = IN[j].HPosition;
+			OUT.baseTC = IN[j].baseTC;
+			OUT.alphaClip.xyz = IN[j].alphaClip.xyz;
+			OUT.alphaClip.w = depthBack1;
+			OUT.color = IN[j].color;
+#if %_RT_ANIM_BLEND
+			OUT.color.w = IN[j].blendTC.x;
+#endif
+
+			outputStream.Append(OUT);
+		}
+		outputStream.RestartStrip();
+	}
+}
+
+pixoutParticleVolumeFogPS ParticleVolumeFogPS(OutputParticleVolumeFogGS IN)
+{
+	pixoutParticleVolumeFogPS OUT = (pixoutParticleVolumeFogPS) 0;
+
+#if %_RT_DEBUG0 || %_RT_DEBUG1 || %_RT_DEBUG2 || %_RT_DEBUG3
+	return OUT;
+#endif
+
+	half4 cDiffuseMap = GetTexture2D(diffuseSampler, IN.baseTC.xy);
+#if %_RT_ANIM_BLEND
+	// Blend in second tile
+	const float3 blendTC = float3(IN.baseTC.x, IN.baseTC.y, IN.color.w);
+	half4 cDiffuseMapSec = GetTexture2D(diffuseSampler, blendTC.xy);
+	cDiffuseMap += (cDiffuseMapSec - cDiffuseMap) * blendTC.z;
+#endif
+
+	cDiffuseMap.rgb *= IN.color.rgb;
+
+	// Early-out alpha clipping and scaling
+	cDiffuseMap.a -= IN.alphaClip.y;
+	if (cDiffuseMap.a <= 0.01)
+		discard;
+
+	cDiffuseMap.a = min(cDiffuseMap.a, IN.alphaClip.z) * IN.alphaClip.x;
+	cDiffuseMap.a = saturate(cDiffuseMap.a);
+
+	// calculate jittered coverage of voxel
+	float jitter = GetJitterInternal(IN.HPosition.xy, PerView_AnimGenParams.zz * float2(0.25, 0.125));
+	const float depthFront0 = IN.volume.z;
+	const float depthFront1 = IN.volume.w;
+	const float depthBack0 = depthFront1;
+	const float depthBack1 = IN.alphaClip.w;
+	const float linearDepthFront = IN.volume.x;
+	const float linearDepthBack = IN.volume.y;
+	float voxelFront = lerp(depthFront0, depthFront1, jitter);
+	float voxelBack = lerp(depthBack0, depthBack1, jitter);
+	float frontDepth = clamp(linearDepthFront, voxelFront, voxelBack);
+	float backDepth = clamp(linearDepthBack, voxelFront, voxelBack);
+	float dist = voxelBack - voxelFront;
+	dist = (dist > 0.0001f) ? dist : 0.0001f;
+	const half coverage = (backDepth - frontDepth) / dist;
+
+	cDiffuseMap.a *= coverage;
+	half4 cFinal = float4(cDiffuseMap.rgb * cDiffuseMap.a, cDiffuseMap.a);
+
+	OUT.Color.xyz = cFinal.xyz;
+	OUT.Color1.x = cFinal.w;
+
+	return OUT;
+}
+
+
+/////////////////////////////////
+// technique
+// Needs to match the technique numbers in CRenderer::EF_GetParticleListAndBatchFlags function.
+
+technique ParticlesTessellated
+<
+	string Script =
+		"TechniqueCustomRender=CustomRenderPass;"
+//    "TechniqueThickness=ThicknessPass;"
+>
+{
+	pass p0
+	{
+		VertexShader = ParticleTessVS();
+		HullShader   = ParticleHS();
+		DomainShader = ParticleDS();
+		PixelShader  = ParticlePS();
+
+		ZEnable = true;
+		ZWriteEnable = false;
+		CullMode = None;
+	}
+}
+
+technique Particles
+<
+	string Script =
+			"TechniqueCustomRender=CustomRenderPass;"
+//    "TechniqueThickness=ThicknessPass;"
+>
+{
+	pass p0
+	{
+		VertexShader = ParticleVS();
+		PixelShader  = ParticlePS();
+
+		ZEnable = true;
+		ZWriteEnable = false;
+		CullMode = None;
+	}
+}
+
+technique ParticlesVolumeFog
+{
+	pass p0
+	{
+		VertexShader = ParticleVolumeFogVS() ParticleVS;
+		GeometryShader = ParticleVolumeFogGS() ParticleGS;
+		PixelShader  = ParticleVolumeFogPS() ParticlePS;
+
+		ZEnable = false;
+		ZWriteEnable = false;
+		CullMode = None;
+
+		SrcBlend = ONE;
+		DestBlend = ONE;
+		AlphaBlendEnable = true;
+	}
+}
+
+
+#include "ParticlesCustomPass.cfi"
+// #include "ParticlesThicknessPass.cfi"

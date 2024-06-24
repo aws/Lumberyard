@@ -56,6 +56,7 @@
 			<!-- <item name="Type" as="Particles.Source" /> -->
 			<item name="Texture" as="Appearance.Texture" visibility="cpu,gpu"/>
 			<item name="Texture Tiling" as="Appearance.Texture_Tiling" visibility="cpu,gpu"/>
+			<item name="Glow Texture Tiling" as="Appearance.Glow_Texture_Tiling" visibility="cpu,gpu"/>
 			<item name="Color" as="Appearance.Color" visibility="cpu,gpu">
 				<relation scr="Particles.Color" slot="alpha" dst="Appearance.Alpha" />
 				<relation scr="Particles.Color" slot="randomColor" dst="Appearance.Color.Color" />

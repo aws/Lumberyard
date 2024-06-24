@@ -138,6 +138,8 @@ enum ECGParam
     ECGP_PI_FurParams,
     ECGP_PI_PrevObjWorldMatrix,
 
+    ECGP_PI_GlowTextureTileSize,
+
     ECGP_COUNT,
 };
 

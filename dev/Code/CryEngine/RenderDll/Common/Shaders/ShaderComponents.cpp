@@ -138,6 +138,8 @@ static SParamDB sParams[] =
     SParamDB(PARAM(PI_FurParams, ECGP_PI_FurParams), 0),
     SParamDB(PARAM(PI_PrevObjWorldMatrix, ECGP_PI_PrevObjWorldMatrix), 0),
 
+    SParamDB(PARAM(PI_GlowTextureTileSize, ECGP_PI_GlowTextureTileSize), 0),
+
     SParamDB()
 };
 

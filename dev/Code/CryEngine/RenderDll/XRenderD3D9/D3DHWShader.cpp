@@ -1478,6 +1478,20 @@ namespace
         }
     }
 
+    NO_INLINE void sGlowTextureTileSize(UFloat4* sData, SRenderPipeline& rRP)
+    {
+        SRenderObjData* pOD = rRP.m_pCurObject->GetObjData();
+        if (pOD && pOD->m_pParticleParams)
+        {
+            // Tile info: SizeX, SizeY, Count, First
+            ParticleParams::STextureTiling const& tiling = pOD->m_pParticleParams->GlowTextureTiling;
+            sData[0].f[0] = 1.f / tiling.nTilesX;
+            sData[0].f[1] = 1.f / tiling.nTilesY;
+            sData[0].f[2] = (float)tiling.nAnimFramesCount;
+            sData[0].f[3] = (float)tiling.nFirstTile;
+        }
+    }
+
     NO_INLINE void sMotionBlurInfo(UFloat4* sData, SRenderPipeline& rRP)
     {
 #ifdef PARTICLE_MOTION_BLUR
@@ -2069,6 +2083,9 @@ void CHWShader_D3D::UpdatePerInstanceConstants(
             break;
         case ECGP_PI_TextureTileSize:
             sTextureTileSize(result, rRP);
+            break;
+        case ECGP_PI_GlowTextureTileSize:
+            sGlowTextureTileSize(result, rRP);
             break;
         case ECGP_PI_MotionBlurInfo:
             sMotionBlurInfo(result, rRP);
@@ -3301,6 +3318,21 @@ bool CHWShader_D3D::mfSetSamplers_Old(const std::vector<STexSamplerRT>& Samplers
                     if (rd->m_RP.m_pCurObject)
                     {
                         nCustomID = rd->m_RP.m_pCurObject->m_nTextureID;
+                        if (nCustomID > 0)
+                        {
+                            pTex = CTexture::GetByID(nCustomID);
+                        }
+                    }
+                    pTex->Apply(nTUnit, nTState, nTexMaterialSlot, nSUnit);
+                }
+                break;
+
+                case TO_FROMOBJ_GLOW:
+                {
+                    CTexture* pTex = CTextureManager::Instance()->GetBlackTexture();
+                    if (rd->m_RP.m_pCurObject)
+                    {
+                        nCustomID = rd->m_RP.m_pCurObject->m_nParticleGlowTexID;
                         if (nCustomID > 0)
                         {
                             pTex = CTexture::GetByID(nCustomID);

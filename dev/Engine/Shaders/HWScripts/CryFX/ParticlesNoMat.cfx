@@ -1,0 +1,74 @@
+/*
+* All or portions of this file Copyright (c) Amazon.com, Inc. or its affiliates or
+* its licensors.
+*
+* For complete copyright and license terms please see the LICENSE at the root of this
+* distribution (the "License"). All use of this software is governed by the License,
+* or, if provided, by the license below or the license accompanying this file. Do not
+* remove or modify any license notices. This file is distributed on an "AS IS" BASIS,
+* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+*
+*/
+// Original file Copyright Crytek GMBH or its affiliates, used under license.
+
+#include "Common.cfi"
+#include "ParticleVT.cfi"
+#include "ModificatorVT.cfi"
+#include "ShadeLib.cfi"
+#include "LightVolumes.cfi"
+#include "ParticlesShadowPass.cfi"
+
+float Script : STANDARDSGLOBAL
+<
+  string Script =
+           "NoPreview;"
+           "ShaderDrawType = Light;"
+           "ShaderType = Particle;"
+>;
+
+sampler2D diffuseSamplerAniso = sampler_state
+{
+  Texture = $FromObj;
+  MinFilter = ANISOTROPIC;
+  MagFilter = ANISOTROPIC;
+  MipFilter = ANISOTROPIC;
+  AnisotropyLevel = 16;
+  sRGBLookup = true;
+};
+
+sampler2D diffuseSampler = sampler_state
+{
+  Texture = $FromObj;
+  MinFilter = LINEAR;
+  MagFilter = LINEAR;
+  MipFilter = LINEAR;
+  sRGBLookup = true;
+};
+
+samplerCUBE diffuseCMSampler = sampler_state
+{
+  Texture = $FromRE0;
+  AddressU = Clamp;
+  AddressV = Clamp;
+  MinFilter = POINT;
+  MagFilter = POINT;
+  MipFilter = NONE;
+};
+
+#define %GLOW_MAP
+sampler2D glowMapSampler = sampler_state
+{
+  Texture = $FromObjGlow;
+  AddressU = Border;
+  AddressV = Border;
+  BorderColor = {0, 0, 0, 0};
+  MinFilter = LINEAR;
+  MagFilter = LINEAR;
+  MipFilter = LINEAR;
+  sRGBLookup = true;
+};
+
+half4 FromObjSB[2] : PB_FromObjSB;
+
+
+#include "Particles.cfi"

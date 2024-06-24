@@ -112,6 +112,7 @@
    <item nane="Normal Map" visibility="Emitter.Emitter_Type:gpu;Emitter.Emitter_Shape:all" as="Appearance.Normal_Map"/>
    <item name="Glow Map" visibility="Emitter.Emitter_Type:gpu;Emitter.Emitter_Shape:all" as="Appearance.Glow_Map"/>
    <item name="Texture Tiling" visibility="Emitter.Emitter_Type:all;Emitter.Emitter_Shape:all" as="Appearance.Texture_Tiling"/>
+   <item name="Glow Texture Tiling" visibility="Emitter.Emitter_Type:all;Emitter.Emitter_Shape:all" as="Appearance.Glow_Texture_Tiling"/>
    <item name="Color" visibility="Emitter.Emitter_Type:all;Emitter.Emitter_Shape:all" as="Appearance.Color">
     <relation scr="Appearance.Color" slot="alpha" dst="Appearance.Alpha"/>
     <relation scr="Appearance.Color" slot="randomColor" dst="Appearance.Color.Color"/>

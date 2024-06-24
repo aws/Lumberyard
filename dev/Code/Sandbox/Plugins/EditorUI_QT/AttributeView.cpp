@@ -1316,10 +1316,28 @@ void CAttributeView::UpdateLogicalChildren(IVariable* var)
         if (textureString.isEmpty() && materialString.isEmpty())
         {
             SetEnabledFromPath("Appearance.Texture_Tiling", false);//then disable logical children
+            SetEnabledFromPath("Appearance.GlowTexture_Tiling", false);//then disable logical children
         }
         else
         {
             SetEnabledFromPath("Appearance.Texture_Tiling", true);//then enable logical children
+            SetEnabledFromPath("Appearance.GlowTexture_Tiling", true);//then enable logical children
+        }
+    }
+    // is this the glow texture
+    else if (varPath.compare("Appearance.GlowTexture", Qt::CaseInsensitive) == 0)
+    {
+        // Get the text fields for texture and material
+        IVariable* textureVariable = GetVarFromPath("Appearance.GlowTexture");
+        QString textureString = textureVariable->GetDisplayValue();
+
+        if (textureString.isEmpty())
+        {
+            SetEnabledFromPath("Appearance.GlowTexture_Tiling", false);//then disable logical children
+        }
+        else
+        {
+            SetEnabledFromPath("Appearance.GlowTexture_Tiling", true);//then enable logical children
         }
     }
     //is this the physics type property

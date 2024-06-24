@@ -1,0 +1,227 @@
+////////////////////////////////////////////////
+// shader constants
+
+float4 TexTileSize          : PI_TextureTileSize;    // xy = tile width/height, z = tile count, w = start
+float4 MotionBlurInfo       : PI_MotionBlurInfo;     // x = cam stretch, y = movement stretch, z = blurring
+half4 ParticleParams        : PI_ParticleParams;     // per emitter parameters: xy = expansion, z = curvature, w = back lighting
+half4 ParticleParams2       : PI_ParticleSoftParams; // second set of particle params: x = softness scale, y = spherical param, z = volume thickness
+half4 ParticleParams3       : PI_ParticleExtParams; 	// third set of particle params: x = multiplier for trial texcoord.v, y = env probe lighting scalar
+half3 ParticleAlphaTest[2]  : PI_ParticleAlphaTest;  // Coeffs for (AT0 + alpha AT1): x = alpha scale, y = source min, z = source width
+float4 GlowTexTileSize      : PI_GlowTextureTileSize;   // xy = tile width/height, z = tile count, w = start
+
+#define HALFRES_DEBUG_COLOR half3(0.3h, 3.h, 0.3h)
+
+struct app2vertParticleGeneral
+{
+	float4 Color     : COLOR0;
+	float4 baseTC    : COLOR1;
+	float3 XAxis     : TEXCOORD0;
+	float3 YAxis     : TEXCOORD1;
+#if %_RT_MOTION_BLUR
+	float3 PrevPos   : POSITION1;
+	float3 PrevXAxis : TEXCOORD2;
+	float3 PrevYAxis : TEXCOORD3;
+#endif
+};
+
+//////////////////////////////////////////////////////////////////////////////////////////////////
+// Common particle vertex structure for all shared vertex shader processing.
+//  - check ParticleThicknessVS for example usage
+
+struct SParticleVertex
+{
+	float4 HPosition;
+	float4 WPos;
+
+#ifdef %_RT_SAMPLE0
+    float4 glowTC;
+#endif
+
+	float4 baseTC;      // xy = final tc; zw = orig tc
+	float4 blendTC;     // 2nd tex coords, z is blend value for 2nd texture tile; w = shadow occlusion
+	half4 alphaClip;    // x = alpha scale, y = source alpha min, z = source alpha range; w = thickness coeff (soft)
+
+	// These 3 interpolators are redundant - todo: pass instead WorldPos and WorldCenterPos, compute normal/tangents per-pixel
+	half4 vWorldPos;    // w is binormal.z
+	half4 vTangent;     // w is binormal.y
+	half4 vNormal;      // w is binormal.x (if lighting and material are used)
+
+	half4 localFogColor;
+
+	half4 vMotionBlur;
+	half3 vMotionBlur2;
+	
+	half4 Color;
+
+	// 4 band spherical harmonics basis
+	half4 SHBasis0;
+	half4 SHBasis1;
+	half4 SHBasis2;
+};
+
+void Particle_Setup_General(inout float4 vPos, float4x4 mViewProj, inout app2vertParticleGeneral IN, inout SParticleVertex OUT)
+{
+	// ParticleParams.xy: 0 = no expand, -1 = expand position only, 1 = expand position and curved normals.
+
+	// Apply TCs to axes
+	const half2 xyVertCoord = IN.baseTC.xy * 2 - 1;
+	const half2 xyExpand = xyVertCoord * abs(ParticleParams.xy);
+	const half2 xyCurve = xyVertCoord * saturate(ParticleParams.xy);
+	
+	// Expand positions and curved side normals.
+	float3 vToCam = PerView_WorldViewPos - vPos.xyz;
+
+	vPos.xyz += IN.XAxis * xyExpand.x + IN.YAxis * xyExpand.y;
+
+	float3 vViewNormal = PerView_WorldViewPos - vPos;
+	float3 vNormal = cross(IN.YAxis, IN.XAxis);
+	vNormal *= sign(dot(vViewNormal, vNormal));
+	float3 vBitangent;
+
+	//////////////////////////////////////////////////////
+	// Confetti: David Srour
+	// HLSLcc stumbles on the nested if-branches and trashes local vars.
+	// Rewriting the if-orders gets around this issue.
+	if (dot(xyCurve, xyCurve))
+	{
+		// Camera-facing
+		const float fCurveExpand = ParticleParams2.y;
+		if (fCurveExpand)
+		{
+			half fXLen = length(IN.XAxis),
+			     fYLen = length(IN.YAxis),
+			     fMinLen = min(fXLen, fYLen);
+			float3 vCurveNormal = IN.XAxis * (xyCurve.x * fMinLen / fXLen) + IN.YAxis * (xyCurve.y * fMinLen / fYLen);
+			
+			// Move vertices to curved particle tangent point
+			float fTanSqr = dot(vCurveNormal, vCurveNormal);
+			fTanSqr /= max(fTanSqr, dot(vToCam, vToCam));
+			vPos.xyz += (vToCam * fTanSqr + vCurveNormal * (1 - sqrt(1 - fTanSqr))) * fCurveExpand;
+		
+			// Fade out when close to sphere
+			half fFade = lerp(1.0, saturate(2 - fTanSqr * 2.5), fCurveExpand);
+			IN.Color.a *= fFade;
+		}
+						
+		if (ParticleParams.z)
+		{
+			// Curved normals
+			// Rotate tangents for fake round geometry
+
+			float3 vSideNormal = IN.XAxis * xyCurve.x + IN.YAxis * xyCurve.y;
+			float3 vCurvedNormal = vSideNormal * dot(vViewNormal, vViewNormal) - vViewNormal * dot(vViewNormal, vSideNormal);
+			OUT.vNormal.xyz = lerp(vNormal * length(vCurvedNormal), vCurvedNormal * length(vNormal), ParticleParams.z);
+
+			#if USE_MATERIAL
+				float3 vAxis = cross(vNormal, OUT.vNormal.xyz);
+				float c = dot(vNormal, OUT.vNormal.xyz);
+				OUT.vTangent.xyz = IN.XAxis * c + cross(vAxis, IN.XAxis);
+				vBitangent = IN.YAxis * c + cross(vAxis, IN.YAxis);
+			#endif
+		}
+	}
+	
+	if (!ParticleParams.z)
+	{
+		// Flat sprite normals
+		if (dot(vNormal, vToCam) < 0)
+			// Implement 2-sided
+			vNormal = -vNormal;
+		OUT.vNormal.xyz = vNormal;
+		#if USE_MATERIAL
+			OUT.vTangent.xyz = IN.XAxis;
+			vBitangent = IN.YAxis;
+		#endif
+	}
+	else
+	{
+		// Curved normals
+		// Rotate tangents for fake round geometry
+
+		float3 vSideNormal = IN.XAxis * xyCurve.x + IN.YAxis * xyCurve.y;
+		float3 vCurvedNormal = vSideNormal * dot(vViewNormal, vViewNormal) - vViewNormal * dot(vViewNormal, vSideNormal);
+		OUT.vNormal.xyz = lerp(vNormal * length(vCurvedNormal), vCurvedNormal * length(vNormal), ParticleParams.z);
+
+		#if USE_MATERIAL
+			float3 vAxis = cross(vNormal, OUT.vNormal.xyz);
+			float c = dot(vNormal, OUT.vNormal.xyz);
+			OUT.vTangent.xyz = IN.XAxis * c + cross(vAxis, IN.XAxis);
+			vBitangent = IN.YAxis * c + cross(vAxis, IN.YAxis);
+		#endif
+	}
+
+	OUT.vNormal.xyz = normalize(OUT.vNormal.xyz);
+
+	#if USE_MATERIAL
+		// Output bitangent in w components to save 1 interpolator (2 extra alu in pixel shader though)
+		OUT.vTangent.xyz = normalize(OUT.vTangent.xyz);
+		vBitangent = normalize(vBitangent);
+		OUT.vNormal.w = vBitangent.x;
+		OUT.vTangent.w = vBitangent.y;
+		OUT.vWorldPos.w = vBitangent.z;
+	#endif
+
+	OUT.vWorldPos.xyz = vPos.xyz;
+	OUT.HPosition = mul(mViewProj, vPos);
+
+#if %_RT_MOTION_BLUR
+	const half2 vStrength = PerFrame_Time.y * MotionBlurInfo.xy * 0.05;
+	const half4 vScreenRot = IN.ScreenRot;
+	float4 vCenterPos = float4(vPos.xyz, 1);
+	float4 vPrevPos = Particle_Coord_Expand(IN.PrevPos, tangentSpace, IN.baseTC.xy * 2 - 1, IN.PrevScreenRot);
+	vPrevPos = mul(mViewProj, vPrevPos);
+
+	// screenspace positions
+	float4 vCurrPos = OUT.Position;
+	const float2 vSSCenterPos = OUT.SSCenterMotion.xy; // center of particle shape in current frame
+	const float2 vSSPrevPos = vPrevPos.xy / vPrevPos.w;
+	const float2 vSSCurrPos = vCurrPos.xy / vCurrPos.w;
+	// motion vector in SS (camera, vertex)
+	const half2 vSSVertMotionVec = vStrength.y * (vSSCurrPos - vSSPrevPos);
+	float2 vSSMotionVec = vStrength.x * OUT.SSCenterMotion.zw + vSSVertMotionVec;
+	// limit distance
+	half fOpacityCoef = 1;
+	half fBlendRatio = 1;
+	half2 vUVGrad = 0;
+	const half2 vSSRadius = vSSCurrPos - vSSCenterPos;
+	half fConserveRatio = 1.h;
+	const half2 vVertPosLocal = normalize(vSSRadius);
+	float fSSMotionLength = length(vSSMotionVec);
+	if (fSSMotionLength > 1e-4h)
+	{
+		const half2 vSSMotionDir = vSSMotionVec / fSSMotionLength;
+		fSSMotionLength = min(fSSMotionLength, 0.5f);
+		fSSMotionLength *= fSSMotionLength;
+		vSSMotionVec = vSSMotionDir * fSSMotionLength;
+		// ratio for blending between current and previous position based on motion vector and vertex position in particle shape
+		const half fPrevCurrBlend = dot(vVertPosLocal, vSSMotionDir);
+		fBlendRatio = 0.5h + 0.5h * fPrevCurrBlend;
+
+		// extend stretch
+		static const half fFwdBwdRatio = 0.75h;
+		vPrevPos.xy = vSSPrevPos - vSSMotionVec * fFwdBwdRatio;
+		vCurrPos.xy = vSSCurrPos + vSSMotionVec * (1.h - fFwdBwdRatio);
+		vPrevPos.xy *= vPrevPos.w;
+		vCurrPos.xy *= vCurrPos.w;
+
+#if !%REFRACTION
+		vUVGrad.x = dot(normalize(vScreenRot.xy), vSSMotionDir);
+		vUVGrad.y = dot(normalize(vScreenRot.zw), vSSMotionDir);
+		vUVGrad.xy *= vUVGrad.xy * fSSMotionLength * MotionBlurInfo.z;
+#endif
+
+		// Rough estimate of screen space area change of a particle
+		const half fConserveMin = 0.4h - saturate(0.1h * (GetMaterial_Emittance().x + Ambient.x)) * 0.35h;
+		fConserveRatio = max(saturate(length(vSSRadius) / fSSMotionLength), fConserveMin);
+	}
+
+	OUT.MotionBlur = half4(vSSMotionVec, vVertPosLocal);
+	OUT.MotionBlur2 = half3(min(abs(vUVGrad), 0.04h * TexTileSize.xy), fConserveRatio);
+
+	// lerp between current and previous frame position
+	OUT.Position = lerp(vPrevPos, vCurrPos, fBlendRatio);
+#endif
+
+}
+
+//========================================================================

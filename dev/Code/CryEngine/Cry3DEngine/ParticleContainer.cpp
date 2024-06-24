@@ -1086,10 +1086,12 @@ void CParticleContainer::Render(SRendParams const& RenParams, SPartRenderParams 
         {
             // diffuse texture is set to black to cancel out alpha and make wireframe easy to see
             job.pRenderObject->m_nTextureID = gEnv->pRenderer->GetBlackTextureId();
+            job.pRenderObject->m_nParticleGlowTexID = gEnv->pRenderer->GetBlackTextureId();
         }
         else
         {
             job.pRenderObject->m_nTextureID = pParams->nTexId;
+            job.pRenderObject->m_nParticleGlowTexID = pParams->nGlowTexId;
         }
 
         pOD->m_FogVolumeContribIdx[0] = pOD->m_FogVolumeContribIdx[1] = PRParams.m_nFogVolumeContribIdx;

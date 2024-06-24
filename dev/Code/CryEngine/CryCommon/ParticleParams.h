@@ -1485,6 +1485,7 @@ struct ParticleParams
     };
 
     STextureTiling TextureTiling;                   // Tiling of texture for animation and variation
+    STextureTiling GlowTextureTiling;               // Tiling of glow texture
     TSmallBool bTessellation;                           // If hardware supports, tessellate particles for better shadowing and curved connected particles
     TSmallBool bOctagonalShape;                     // Use octagonal shape for textures instead of quad
     struct SSoftParticle

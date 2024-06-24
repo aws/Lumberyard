@@ -80,6 +80,7 @@ CTexture* CTexture::s_ptexHeightMapAO[2];
 CTexture* CTexture::s_ptexHeightMapAODepth[2];
 CTexture* CTexture::s_ptexFromRE_FromContainer[2];
 CTexture* CTexture::s_ptexFromObj;
+CTexture* CTexture::s_ptexFromObjGlow;
 CTexture* CTexture::s_ptexSvoTree;
 CTexture* CTexture::s_ptexSvoTris;
 CTexture* CTexture::s_ptexSvoGlobalCM;
@@ -2796,6 +2797,7 @@ void CTexture::ReleaseSystemTextures()
     }
 
     SAFE_RELEASE_FORCE(s_ptexFromObj);
+    SAFE_RELEASE_FORCE(s_ptexFromObjGlow);
     SAFE_RELEASE_FORCE(s_ptexSvoTree);
     SAFE_RELEASE_FORCE(s_ptexSvoTris);
     SAFE_RELEASE_FORCE(s_ptexSvoGlobalCM);
@@ -2870,6 +2872,7 @@ void CTexture::LoadDefaultSystemTextures()
         s_ptexRainSSOcclusion[1] = CTexture::CreateTextureObject("$RainSSOcclusion1", 0, 0, 1, eTT_2D, FT_DONT_RELEASE | FT_DONT_STREAM | FT_USAGE_RENDERTARGET, eTF_Unknown);
 
         s_ptexFromObj = CTexture::CreateTextureObject("FromObj", 0, 0, 1, eTT_2D, FT_DONT_RELEASE | FT_DONT_STREAM | FT_USAGE_RENDERTARGET, eTF_Unknown, TO_FROMOBJ);
+        s_ptexFromObjGlow = CTexture::CreateTextureObject("FromObjGlow", 0, 0, 1, eTT_2D, FT_DONT_RELEASE | FT_DONT_STREAM | FT_USAGE_RENDERTARGET, eTF_Unknown, TO_FROMOBJ_GLOW);
         s_ptexSvoTree = CTexture::CreateTextureObject("SvoTree", 0, 0, 1, eTT_3D, FT_DONT_RELEASE | FT_DONT_STREAM | FT_USAGE_RENDERTARGET, eTF_Unknown, TO_SVOTREE);
         s_ptexSvoTris = CTexture::CreateTextureObject("SvoTris", 0, 0, 1, eTT_3D, FT_DONT_RELEASE | FT_DONT_STREAM | FT_USAGE_RENDERTARGET, eTF_Unknown, TO_SVOTRIS);
         s_ptexSvoGlobalCM = CTexture::CreateTextureObject("SvoGlobalCM", 0, 0, 1, eTT_Cube, FT_DONT_RELEASE | FT_DONT_STREAM | FT_USAGE_RENDERTARGET, eTF_Unknown, TO_SVOGLCM);

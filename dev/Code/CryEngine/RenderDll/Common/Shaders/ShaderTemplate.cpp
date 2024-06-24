@@ -521,6 +521,10 @@ CTexture* CShaderMan::mfCheckTemplateTexName(const char* mapname, ETEX_Type eTT)
         TexPic = CTexture::s_ptexFromObj;
     }
     else
+    if (!azstricmp(mapname, "$FromObjGlow"))
+    {
+        TexPic = CTexture::s_ptexFromObjGlow;
+    }
     if (!azstricmp(mapname, "$SvoTree"))
     {
         TexPic = CTexture::s_ptexSvoTree;
