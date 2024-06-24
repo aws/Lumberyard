@@ -43,6 +43,7 @@ namespace LmbrCentral
 
         //! Settings common to all LY engine lights
         EngineSpec m_minSpec;
+        IRenderNode::EVoxelGIMode m_voxelGIMode { IRenderNode::VM_None };
 
         //! Turned on by default?
         bool m_onInitially;

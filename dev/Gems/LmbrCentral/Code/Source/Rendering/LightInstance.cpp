@@ -406,6 +406,12 @@ namespace LmbrCentral
     void LightInstance::CreateRenderLight(const LensFlareConfiguration& configuration)
     {
         CreateRenderLightInternal(configuration, LensFlareConfigToLightParams);
+#if defined(FEATURE_SVO_GI)
+        if (m_renderLight)
+        {
+            m_renderLight->SetDesiredVoxelGIMode(configuration.m_voxelGIMode);
+        }
+#endif
     }
 
     void LightInstance::UpdateRenderLight(const LightConfiguration& configuration)

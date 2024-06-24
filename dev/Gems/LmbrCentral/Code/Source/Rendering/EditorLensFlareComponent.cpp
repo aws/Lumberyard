@@ -85,7 +85,7 @@ namespace LmbrCentral
         if (serializeContext)
         {
             serializeContext->Class<EditorLensFlareConfiguration, LensFlareConfiguration>()->
-                Version(1);
+                Version(2);
 
             AZ::EditContext* editContext = serializeContext->GetEditContext();
             if (editContext)
@@ -106,6 +106,12 @@ namespace LmbrCentral
                         EnumAttribute(EngineSpec::High, "High")->
                         EnumAttribute(EngineSpec::Medium, "Medium")->
                         EnumAttribute(EngineSpec::Low, "Low")->
+                    
+                    DataElement(AZ::Edit::UIHandlers::ComboBox, &LensFlareConfiguration::m_voxelGIMode, "Voxel GI mode", "Mode for light interaction with voxel GI.")->
+                        Attribute(AZ::Edit::Attributes::ChangeNotify, &LensFlareConfiguration::PropertyChanged)->
+                        EnumAttribute(IRenderNode::VM_None, "None")->
+                        EnumAttribute(IRenderNode::VM_Static, "Static")->
+                        EnumAttribute(IRenderNode::VM_Dynamic, "Dynamic")->
 
                     DataElement(0, &LensFlareConfiguration::m_lensFlareFrustumAngle, "FOV", "The lens flare FOV angle")->
                         Attribute(AZ::Edit::Attributes::ChangeNotify, &LensFlareConfiguration::PropertyChanged)->

@@ -95,6 +95,7 @@ namespace LmbrCentral
                 Field("Asset", &LensFlareConfiguration::m_asset)->
 
                 Field("MinimumSpec", &LensFlareConfiguration::m_minSpec)->
+                Field("VoxelGIMode", &LensFlareConfiguration::m_voxelGIMode)->
                 Field("LensFlareFrustumAngle", &LensFlareConfiguration::m_lensFlareFrustumAngle)->
                 Field("Size", &LensFlareConfiguration::m_size)->
                 Field("AttachToSun", &LensFlareConfiguration::m_attachToSun)->
