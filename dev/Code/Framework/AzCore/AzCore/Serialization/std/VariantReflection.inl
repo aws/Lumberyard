@@ -67,19 +67,25 @@ namespace AZ
             AZStdVariantContainer()
             {
                 CreateClassElementArray(AZStd::make_index_sequence<s_variantSize>{});
+
+                // Set basic information about this type
+                m_thisClassElement.m_name = GetDefaultElementName();
+                m_thisClassElement.m_nameCrc = GetDefaultElementNameCrc();
+                m_thisClassElement.m_dataSize = sizeof(VariantType);
+                m_thisClassElement.m_offset = 0;
+                m_thisClassElement.m_azRtti = GetRttiHelper<VariantType>();
+                m_thisClassElement.m_flags = SerializeContext::ClassElement::FLG_DYNAMIC_FIELD;
+                m_thisClassElement.m_typeId = SerializeGenericTypeInfo<VariantType>::GetClassTypeId();
+
+                // Setup attribute allocates
+                m_thisClassElement.m_attributes.set_allocator(AZ::AZStdFunctorAllocator([]() -> AZ::IAllocatorAllocate& { return AZ::GetCurrentSerializeContextModule().GetAllocator(); }));
+
             }
 
             /// Returns the element generic (offsets are mostly invalid 0xbad0ffe0, there are exceptions). Null if element with this name can't be found.
             const SerializeContext::ClassElement* GetElement(u32 elementNameCrc) const override
             {
-                for (const SerializeContext::ClassElement& classElement : m_alternativeClassElements)
-                {
-                    if (classElement.m_nameCrc == elementNameCrc)
-                    {
-                        return &classElement;
-                    }
-                }
-                return nullptr;
+                return elementNameCrc == m_thisClassElement.m_nameCrc ? &m_thisClassElement : nullptr;
             }
 
             bool GetElement(SerializeContext::ClassElement& resultClassElement, const SerializeContext::DataElement& dataElement) const override
@@ -218,6 +224,8 @@ namespace AZ
             }
 
             SerializeContext::ClassElement m_alternativeClassElements[s_variantSize];
+            SerializeContext::ClassElement m_thisClassElement;
+
         private:
             template <typename AltType>
             void CreateClassElementAtIndex(SerializeContext::ClassElement& altClassElement, const char* elementName)
@@ -440,6 +448,9 @@ namespace AZ
                 using ContainerType = AttributeContainerType<AZStd::function<void(SerializeContext::EnumerateInstanceCallContext&,
                     const void*, const SerializeContext::ClassData&, const SerializeContext::ClassElement*)>>;
                 m_classData.m_attributes.emplace_back(AZ_CRC("ObjectStreamWriteElementOverride", 0x35eb659f), CreateModuleAttribute<ContainerType>(&ObjectStreamWriter));
+
+                // Tie the knot
+                m_variantContainer.m_thisClassElement.m_genericClassInfo = this;
             }
 
             SerializeContext::ClassData* GetClassData() override
@@ -527,7 +538,8 @@ namespace AZ
 
         static const Uuid& GetClassTypeId()
         {
-            return GetGenericInfo()->GetClassData()->m_typeId;
+            static const Uuid typ = azrtti_typeid<VariantType>();
+            return typ;
         }
     };
 }
