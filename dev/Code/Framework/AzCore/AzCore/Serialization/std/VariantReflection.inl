@@ -100,9 +100,9 @@ namespace AZ
             void EnumElements(void* instance, const ElementCB& cb) override
             {
                 auto variantInst = reinterpret_cast<VariantType*>(instance);
-                auto enumElementsVisitor = [cb, altClassElement = m_alternativeClassElements[variantInst->index()]](auto&& elementAlt)
+                auto enumElementsVisitor = [cb, altClassElement = &m_alternativeClassElements[variantInst->index()]](auto&& elementAlt)
                 {
-                    cb(&const_cast<AZStd::remove_cvref_t<decltype(elementAlt)>&>(elementAlt), altClassElement.m_typeId, altClassElement.m_genericClassInfo ? altClassElement.m_genericClassInfo->GetClassData() : nullptr, &altClassElement);
+                    cb(&const_cast<AZStd::remove_cvref_t<decltype(elementAlt)>&>(elementAlt), altClassElement->m_typeId, altClassElement->m_genericClassInfo ? altClassElement->m_genericClassInfo->GetClassData() : nullptr, altClassElement);
                 };
                 AZStd::visit(AZStd::move(enumElementsVisitor), *variantInst);
             }
