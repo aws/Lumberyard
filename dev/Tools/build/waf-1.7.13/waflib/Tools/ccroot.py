@@ -16,6 +16,7 @@ from waflib.TaskGen import after_method, before_method, feature, taskgen_method,
 from waflib.Tools import c_aliases, c_preproc, c_config, c_osx, c_tests
 from waflib.Configure import conf
 from waflib.Logs import warn
+import hashlib
 
 
 SYSTEM_LIB_PATHS = ['/usr/lib64', '/usr/lib', '/usr/local/lib64', '/usr/local/lib']
@@ -61,8 +62,25 @@ def create_compiled_task(self, name, node):
 	else:
 		out = '%s.%d.o' % (node.name, index)
 	
-	task = self.create_task(name, node, node.parent.find_or_declare(out))
-	
+	# here we change the path for its md5 hash
+	# this should prevent SNDBS and such from failing to output long file names
+    
+    # creating the output obj/ node
+	objfolder = self.bld.bldnode.find_or_declare("obj")
+    
+    # hash the node parent abs path (should be the file folder)
+	m = hashlib.md5()
+	m.update(node.parent.abspath())
+    
+    # create node with md5 hash name
+	md5folder = objfolder.find_or_declare(m.hexdigest())
+    
+    # create the output task file node
+	selfnode = md5folder.find_or_declare(out)
+    
+	#then proceed to create the task with our modifieded node
+	task = self.create_task(name, node, selfnode)
+    
 	try:
 		self.compiled_tasks.append(task)
 	except AttributeError:

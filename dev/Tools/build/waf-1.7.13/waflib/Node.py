@@ -793,7 +793,7 @@ class Node(object):
 		return node
 
 	# helpers for building things
-	def change_ext(self, ext, ext_in=None):
+	def change_ext_name(self, ext, ext_in=None):
 		"""
 		:return: A build node of the same path, but with a different extension
 		:rtype: :py:class:`waflib.Node.Node`
@@ -808,6 +808,14 @@ class Node(object):
 		else:
 			name = name[:- len(ext_in)] + ext
 
+		return name
+        
+	def change_ext(self, ext, ext_in=None):
+		"""
+		:return: A build node of the same path, but with a different extension
+		:rtype: :py:class:`waflib.Node.Node`
+		"""
+		name = self.change_ext_name(ext, ext_in)
 		return self.parent.find_or_declare([name])
 
 	def nice_path(self, env=None):

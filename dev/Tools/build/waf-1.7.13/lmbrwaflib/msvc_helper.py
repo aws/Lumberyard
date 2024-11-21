@@ -343,8 +343,15 @@ def add_pch_msvc(self):
 
     # Generate PCH per target project idx
     # Avoids the case where two project have the same PCH output path but compile the PCH with different compiler options i.e. defines, includes, ...
-    self.pch_file = pch_source.change_ext('.%d.pch' % self.target_uid)
-    self.pch_object = pch_source.change_ext('.%d.obj' % self.target_uid)
+    # creating the output node
+    objfolder = self.bld.bldnode.find_or_declare("obj")
+    m = hashlib.md5()
+    m.update(pch_source.parent.abspath())
+    md5folder = objfolder.find_or_declare(m.hexdigest())
+
+    self.pch_file = md5folder.find_or_declare(pch_source.change_ext_name('.%d.pch' % self.target_uid))
+    self.pch_object = md5folder.find_or_declare(pch_source.change_ext_name('.%d.obj' % self.target_uid))
+    
     # Create PCH Task
     self.pch_task = pch_task = self.create_task('pch_msvc', pch_source, [self.pch_object, self.pch_file])
     pch_task.env.append_value('PCH_NAME', self.pch_header_name)
